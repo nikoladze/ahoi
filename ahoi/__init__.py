@@ -5,7 +5,11 @@ import glob
 import numpy as np
 from tqdm import tqdm
 
-def run_per_event(masks_list, w, event_function):
+def run_per_event(masks_list, weights, event_function):
+
+    if weights is None:
+        weights = np.ones(len(masks_list[0][0]), dtype=np.float32)
+
     # convert masks to 2D np arrays if not yet in that format
     if not all([isinstance(masks, np.ndarray) for masks in masks_list]):
         masks_list = [np.array(masks, dtype=np.bool) for masks in masks_list]
@@ -29,7 +33,7 @@ def run_per_event(masks_list, w, event_function):
 
         event_function(
             masks_buffer,
-            w[i],
+            weights[i],
             0,
             inds,
             dims,
@@ -40,12 +44,12 @@ def run_per_event(masks_list, w, event_function):
     return counts, sumw, sumw2
 
 
-def run_c(masks_list, w):
+def run_c(masks_list, weights):
 
     lib = ctypes.cdll.LoadLibrary(glob.glob(os.path.join(os.path.dirname(__file__), "../ahoi_scan.*.so"))[0])
-    _check_fill_event_c = lib.check_fill
-    _check_fill_event_c.restype = None
-    _check_fill_event_c.argtypes = [
+    _fill_matching = lib.fill_matching
+    _fill_matching.restype = None
+    _fill_matching.argtypes = [
         ndpointer(dtype=np.uintp, ndim=1, flags="C_CONTIGUOUS"),  # masks
         ctypes.c_double,  # wi
         ctypes.c_int,  # j
@@ -57,12 +61,12 @@ def run_c(masks_list, w):
         ndpointer(dtype=ctypes.c_double, ndim=1, flags="C_CONTIGUOUS"),  # sumw2
     ]
 
-    def check_fill_event_c(masks, wi, j, inds, dims, counts, sumw, sumw2):
+    def fill_matching(masks, wi, j, inds, dims, counts, sumw, sumw2):
         p_masks = np.array(
             masks.__array_interface__["data"][0]
             + (np.arange(masks.shape[0]) * masks.strides[0]).astype(np.uintp)
         )
-        _check_fill_event_c(
+        _fill_matching(
             p_masks,
             wi,
             j,
@@ -74,4 +78,8 @@ def run_c(masks_list, w):
             sumw2.ravel(),
         )
 
-    return run_per_event(masks_list, w, event_function=check_fill_event_c)
+    return run_per_event(masks_list, weights, event_function=fill_matching)
+
+
+def scan(masks_list, weights=None):
+    return run_c(masks_list, weights)
