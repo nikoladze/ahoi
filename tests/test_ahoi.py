@@ -1,6 +1,7 @@
 import ahoi
 import numpy as np
 
+
 def test_examples():
     test_values = [[0.1, 0.5, 0.8], [0.6, 0.8], [0.1, 0.5, 0.8, 0.9]]
     for run_f in [ahoi.scan]:
@@ -19,3 +20,28 @@ def test_examples():
                     assert counts[i0][i1][i2] == np.count_nonzero(mask)
                     assert np.isclose(sumw[i0][i1][i2], np.dot(mask, w))
                     assert np.isclose(sumw2[i0][i1][i2], np.dot(mask, w ** 2))
+
+
+def test_noweights():
+    x = np.random.rand(1000, 3)
+    masks_list = [
+        [x[:, j] > i for i in np.linspace(0, 1, 10)] for j in range(x.shape[1])
+    ]
+    w = np.random.normal(size=1000)
+    counts, _, _ = ahoi.scan(masks_list, w)
+    counts2 = ahoi.scan(masks_list)
+    assert (counts == counts2).all()
+
+
+def test_singlecut():
+    masks_list = [[[0]]]
+    counts = ahoi.scan(masks_list)
+    assert ahoi.scan([[[0]]]) == [0]
+    assert ahoi.scan([[[1]]]) == [1]
+    assert ahoi.scan([[[1, 0, 0, 1]]]) == [2]
+    assert np.all(ahoi.scan([[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]]) == [2, 3, 1])
+    counts, sumw, sumw2 = ahoi.scan(
+        [[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]], weights=[2, 3, 4, 5]
+    )
+    assert np.all(sumw == [7, 9, 2])
+    assert np.all(sumw2 == [29, 29, 4])

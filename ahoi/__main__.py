@@ -13,4 +13,5 @@ masks_list = [
     [x[:, 6] > i for i in np.arange(0, 1, 0.1)],
 ]
 
-counts, sumw, sumw2 = ahoi.scan(masks_list)
+w = np.random.normal(size=len(x))
+ahoi.scan(masks_list, w)
