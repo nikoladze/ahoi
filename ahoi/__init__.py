@@ -46,7 +46,10 @@ def run_per_event(masks_list, weights, event_function):
 
 def run_c(masks_list, weights):
 
-    lib = ctypes.cdll.LoadLibrary(glob.glob(os.path.join(os.path.dirname(__file__), "../ahoi_scan.*.so"))[0])
+    import importlib
+
+    # not sure if this is the right way to find the compiled library ...
+    lib = ctypes.cdll.LoadLibrary(importlib.util.find_spec("ahoi_scan").origin)
     _fill_matching = lib.fill_matching
     _fill_matching.restype = None
     _fill_matching.argtypes = [
