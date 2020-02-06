@@ -6,9 +6,65 @@ import numpy as np
 from tqdm import tqdm
 
 
-def scan(masks_list, weights=None, method="c", progress=True):
+def scan(masks_list, weights=None, method="c", progress=False):
     """
-    This function is the main interface.
+    Scan all combinations of matching flags
+
+    Parameters:
+    -----------
+    masks_list: list of array_like
+        A list of masks where masks are 2d arrays with shape (n_criteria,
+        n_events) of match flags for all selection criteria for a certain
+        selection.
+    weights: array_like, optional
+        An array of weights for all events. If given, in addition to the counts of
+        matching combinations, the sum of weights and the sum of squares of
+        weights will be filled and returned.
+    method: {"c", "numpy"}, optional
+        Method to use for the scan. "c" (default) uses a precompiled c function
+        to perform the scan on a per-event basis, "numpy" uses numpy functions
+        to perform the main loop over all combinations. In most cases "c" is
+        the fastest.
+    progress: bool, optional
+        If True, show progress bar
+
+    Returns:
+    --------
+    counts: ndarray
+        A multi-dimensional array of counts for matching combinations.
+    sumw: ndarray, optional
+        A multi-dimensional array of the sum of weights for matching
+        combinations. Only provided if weights is not None.
+    sumw2: ndarray, optional
+        A multi-dimensional array of the sum of squares of weights for matching
+        combinations. Only provided if weights is not None.
+
+    Examples:
+    ---------
+    Scan 4 events for combinations of two selections (e.g. cut variables). The
+    first selection has two criteria (e.g. cut values), where the first
+    criterion matches for the first 3 events, the second one for the first and
+    third event. The second selection has 3 criteria with events (0, 1, 3), (1,
+    3) and 4 matching. That results in combinations for which the counts of
+    matching events will be returned.
+
+    >>> scan([[[1, 1, 1, 0], [1, 0, 1, 0]],
+    ...       [[1, 1, 0, 1], [0, 1, 0, 1], [0, 0, 0, 1]]])
+    array([[2, 1, 0],
+           [1, 0, 0]])
+
+    It is possible to pass weights. In this case the sum of weights and sum of
+    squares of weights for each combination will be returned as well.
+
+    >>> scan([[[1, 1, 1, 0], [1, 0, 1, 0]],
+    ...       [[1, 1, 0, 1], [0, 1, 0, 1], [0, 0, 0, 1]]], weights=[1.2, 5., 0.1, 1.])
+    ... # doctest:+NORMALIZE_WHITESPACE
+    (array([[2, 1, 0],
+           [1, 0, 0]]),
+    array([[6.2, 5. , 0. ],
+           [1.2, 0. , 0. ]]),
+    array([[26.44, 25.  ,  0.  ],
+           [ 1.44,  0.  ,  0.  ]]))
     """
     scanner_dict = {
         "c": PerEventScannerC,
