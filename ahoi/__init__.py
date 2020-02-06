@@ -6,11 +6,15 @@ import numpy as np
 from tqdm import tqdm
 
 
-def scan(masks_list, weights=None):
+def scan(masks_list, weights=None, method="c"):
     """
     This function is the main interface.
     """
-    scanner = PerEventScannerC(masks_list, weights=weights)
+    scanner_dict = {
+        "c": PerEventScannerC,
+        "numpy": ScannerNumpy,
+    }
+    scanner = scanner_dict[method](masks_list, weights=weights)
     scanner.run()
     if weights is None:
         return scanner.counts
@@ -29,6 +33,8 @@ class Scanner:
         self.masks_list = masks_list
 
         self.weights = weights
+        if (self.weights is not None) and (not isinstance(self.weights, np.ndarray)):
+            self.weights = np.array(self.weights, dtype=np.float64)
 
         self.shape = np.array([len(masks) for masks in masks_list], dtype=np.int64)
         self.counts = np.zeros(self.shape, dtype=np.int64)
@@ -123,3 +129,31 @@ class PerEventScannerC(PerEventScanner):
             sumw2,
             use_weights,
         )
+
+
+class ScannerNumpy(Scanner):
+    def run(self):
+
+        current_mask = np.ones_like(self.masks_list[0][0], dtype=np.bool)
+        multi_index = np.zeros_like(self.shape, dtype=np.int32)
+        if self.weights is not None:
+            w = self.weights
+            w2 = self.weights ** 2
+
+        def generator_check_fill(j, current_mask):
+            for i, mask in enumerate(self.masks_list[j]):
+                multi_index[j] = i
+                new_mask = current_mask & mask
+                if j != (len(self.masks_list) - 1):
+                    yield from generator_check_fill(j + 1, new_mask)
+                else:
+                    self.counts[tuple(multi_index)] = np.count_nonzero(new_mask)
+                    if self.weights is not None:
+                        self.sumw[tuple(multi_index)] = np.dot(new_mask, w)
+                        self.sumw2[tuple(multi_index)] = np.dot(new_mask, w2)
+                    yield 1
+
+        for i in tqdm(
+            generator_check_fill(0, current_mask), total=len(self.counts.ravel())
+        ):
+            pass

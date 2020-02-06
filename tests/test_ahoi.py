@@ -1,10 +1,11 @@
 import ahoi
 import numpy as np
 
+scanner_methods = ["c", "numpy"]
 
 def test_examples():
     test_values = [[0.1, 0.5, 0.8], [0.6, 0.8], [0.1, 0.5, 0.8, 0.9]]
-    for run_f in [ahoi.scan]:
+    for method in scanner_methods:
         x = np.random.rand(10000, 3)
         w = np.random.normal(loc=1, size=len(x))
         masks_list = [
@@ -12,7 +13,7 @@ def test_examples():
             [x[:, 1] < i for i in test_values[1]],
             [x[:, 2] > i for i in test_values[2]],
         ]
-        counts, sumw, sumw2 = run_f(masks_list, weights=w)
+        counts, sumw, sumw2 = ahoi.scan(masks_list, weights=w, method=method)
         for i0, v0 in enumerate(test_values[0]):
             for i1, v1 in enumerate(test_values[1]):
                 for i2, v2 in enumerate(test_values[2]):
@@ -23,25 +24,27 @@ def test_examples():
 
 
 def test_noweights():
-    x = np.random.rand(1000, 3)
-    masks_list = [
-        [x[:, j] > i for i in np.linspace(0, 1, 10)] for j in range(x.shape[1])
-    ]
-    w = np.random.normal(size=1000)
-    counts, _, _ = ahoi.scan(masks_list, w)
-    counts2 = ahoi.scan(masks_list)
-    assert (counts == counts2).all()
+    for method in scanner_methods:
+        x = np.random.rand(1000, 3)
+        masks_list = [
+            [x[:, j] > i for i in np.linspace(0, 1, 10)] for j in range(x.shape[1])
+        ]
+        w = np.random.normal(size=1000)
+        counts, _, _ = ahoi.scan(masks_list, w, method=method)
+        counts2 = ahoi.scan(masks_list, method=method)
+        assert (counts == counts2).all()
 
 
 def test_singlecut():
-    masks_list = [[[0]]]
-    counts = ahoi.scan(masks_list)
-    assert ahoi.scan([[[0]]]) == [0]
-    assert ahoi.scan([[[1]]]) == [1]
-    assert ahoi.scan([[[1, 0, 0, 1]]]) == [2]
-    assert np.all(ahoi.scan([[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]]) == [2, 3, 1])
-    counts, sumw, sumw2 = ahoi.scan(
-        [[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]], weights=[2, 3, 4, 5]
-    )
-    assert np.all(sumw == [7, 9, 2])
-    assert np.all(sumw2 == [29, 29, 4])
+    for method in scanner_methods:
+        masks_list = [[[0]]]
+        counts = ahoi.scan(masks_list, method=method)
+        assert ahoi.scan([[[0]]], method=method) == [0]
+        assert ahoi.scan([[[1]]], method=method) == [1]
+        assert ahoi.scan([[[1, 0, 0, 1]]], method=method) == [2]
+        assert np.all(ahoi.scan([[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]]) == [2, 3, 1])
+        counts, sumw, sumw2 = ahoi.scan(
+            [[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]], weights=[2, 3, 4, 5], method=method
+        )
+        assert np.all(sumw == [7, 9, 2])
+        assert np.all(sumw2 == [29, 29, 4])
