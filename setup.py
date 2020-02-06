@@ -8,5 +8,6 @@ setup(
         "numpy",
         "tqdm"
     ],
+    python_requires=">3",
     ext_modules=[Extension("ahoi_scan", sources=["src/ahoi_scan.c"])],
 )
