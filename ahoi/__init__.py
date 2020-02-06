@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def scan(masks_list, weights=None, method="c"):
+def scan(masks_list, weights=None, method="c", progress=True):
     """
     This function is the main interface.
     """
@@ -15,7 +15,7 @@ def scan(masks_list, weights=None, method="c"):
         "numpy": ScannerNumpy,
     }
     scanner = scanner_dict[method](masks_list, weights=weights)
-    scanner.run()
+    scanner.run(progress=progress)
     if weights is None:
         return scanner.counts
     else:
@@ -58,8 +58,8 @@ class PerEventScanner(Scanner):
             dtype=np.bool,
         )
 
-    def run(self):
-        for i in tqdm(range(len(self.masks_list[0][0]))):
+    def run(self, progress=True):
+        for i in tqdm(range(len(self.masks_list[0][0])), disable=not progress, desc="Events"):
 
             # fill per event buffer
             for i_mask, masks in enumerate(self.masks_list):
@@ -132,7 +132,7 @@ class PerEventScannerC(PerEventScanner):
 
 
 class ScannerNumpy(Scanner):
-    def run(self):
+    def run(self, progress=True):
 
         current_mask = np.ones_like(self.masks_list[0][0], dtype=np.bool)
         multi_index = np.zeros_like(self.shape, dtype=np.int32)
@@ -140,12 +140,12 @@ class ScannerNumpy(Scanner):
             w = self.weights
             w2 = self.weights ** 2
 
-        def generator_check_fill(j, current_mask):
+        def fill(j, current_mask):
             for i, mask in enumerate(self.masks_list[j]):
                 multi_index[j] = i
                 new_mask = current_mask & mask
                 if j != (len(self.masks_list) - 1):
-                    yield from generator_check_fill(j + 1, new_mask)
+                    yield from fill(j + 1, new_mask)
                 else:
                     self.counts[tuple(multi_index)] = np.count_nonzero(new_mask)
                     if self.weights is not None:
@@ -154,6 +154,8 @@ class ScannerNumpy(Scanner):
                     yield 1
 
         for i in tqdm(
-            generator_check_fill(0, current_mask), total=len(self.counts.ravel())
+                fill(0, current_mask), total=len(self.counts.ravel()),
+                desc="Combinations",
+                disable=not progress
         ):
             pass
