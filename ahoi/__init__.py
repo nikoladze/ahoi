@@ -227,7 +227,6 @@ class ScannerNumpy(Scanner):
 class ScannerNumpyReduce(Scanner):
     def run(self, progress=True):
 
-        current_mask = np.ones_like(self.masks_list[0][0], dtype=np.bool)
         multi_index = np.zeros_like(self.shape, dtype=np.int32)
         w = None
         w2 = None
