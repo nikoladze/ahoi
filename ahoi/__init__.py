@@ -1,6 +1,7 @@
 import ctypes
 from numpy.ctypeslib import ndpointer
 import os
+import sys
 import glob
 import numpy as np
 from tqdm import tqdm
@@ -78,7 +79,7 @@ def scan(masks_list, weights=None, method="c", progress=False):
         return scanner.counts, scanner.sumw, scanner.sumw2
 
 
-class Scanner:
+class Scanner(object):
     "Base class"
 
     def __init__(self, masks_list, weights=None):
@@ -135,10 +136,14 @@ class PerEventScannerC(PerEventScanner):
     def __init__(self, masks_list, weights=None):
         super(PerEventScannerC, self).__init__(masks_list, weights=weights)
 
-        # not sure if this is the right way to find the compiled library ...
-        import importlib
-
-        lib = ctypes.cdll.LoadLibrary(importlib.util.find_spec("ahoi_scan").origin)
+        # ... not sure if this is the right way to find the library
+        if sys.version_info[0] < 3:
+            import pkgutil
+            lib_filename = pkgutil.get_loader("ahoi_scan").filename
+        else:
+            import importlib
+            lib_filename = importlib.util.find_spec("ahoi_scan").origin
+        lib = ctypes.cdll.LoadLibrary(lib_filename)
         self._fill_matching = lib.fill_matching
         self._fill_matching.restype = None
         self._fill_matching.argtypes = [
@@ -201,7 +206,8 @@ class ScannerNumpy(Scanner):
                 multi_index[j] = i
                 new_mask = current_mask & mask
                 if j != (len(self.masks_list) - 1):
-                    yield from fill(j + 1, new_mask)
+                    for _ in fill(j + 1, new_mask):
+                        yield 1
                 else:
                     self.counts[tuple(multi_index)] = np.count_nonzero(new_mask)
                     if self.weights is not None:

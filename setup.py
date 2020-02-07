@@ -11,7 +11,7 @@ setup(
         "numpy",
         "tqdm"
     ],
-    python_requires=">3",
+    python_requires=">2.7",
     ext_modules=[Extension("ahoi_scan", sources=["src/ahoi_scan.c"])],
     author="Nikolai Hartmann",
     author_email="nikoladze@posteo.de",

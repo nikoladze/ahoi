@@ -1,7 +1,7 @@
 import ahoi
 import numpy as np
 
-x = np.random.rand(10000, 7)
+x = np.random.rand(1000, 7)
 
 masks_list = [
     [x[:, 0] > i for i in np.linspace(0.9, 1, 10)],
@@ -14,4 +14,4 @@ masks_list = [
 ]
 
 w = np.random.normal(size=len(x))
-ahoi.scan(masks_list, w)
+counts, sumw, sumw2 = ahoi.scan(masks_list, w, progress=True)
