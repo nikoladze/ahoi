@@ -21,11 +21,11 @@ def scan(masks_list, weights=None, method="c", progress=False):
         An array of weights for all events. If given, in addition to the counts of
         matching combinations, the sum of weights and the sum of squares of
         weights will be filled and returned.
-    method: {"c", "numpy"}, optional
+    method: {"c", "numpy", "numpy_reduce"}, optional
         Method to use for the scan. "c" (default) uses a precompiled c function
-        to perform the scan on a per-event basis, "numpy" uses numpy functions
-        to perform the main loop over all combinations. In most cases "c" is
-        the fastest.
+        to perform the scan on a per-event basis, "numpy" and "numpy_reduce"
+        use numpy functions to perform the main loop over all combinations. In
+        most cases "c" is the fastest.
     progress: bool, optional
         If True, show progress bar
 
@@ -70,6 +70,7 @@ def scan(masks_list, weights=None, method="c", progress=False):
     scanner_dict = {
         "c": PerEventScannerC,
         "numpy": ScannerNumpy,
+        "numpy_reduce": ScannerNumpyReduce,
     }
     scanner = scanner_dict[method](masks_list, weights=weights)
     scanner.run(progress=progress)
@@ -217,6 +218,46 @@ class ScannerNumpy(Scanner):
 
         for i in tqdm(
                 fill(0, current_mask), total=len(self.counts.ravel()),
+                desc="Combinations",
+                disable=not progress
+        ):
+            pass
+
+
+class ScannerNumpyReduce(Scanner):
+    def run(self, progress=True):
+
+        current_mask = np.ones_like(self.masks_list[0][0], dtype=np.bool)
+        multi_index = np.zeros_like(self.shape, dtype=np.int32)
+        w = None
+        w2 = None
+        if self.weights is not None:
+            w = self.weights
+            w2 = self.weights ** 2
+
+        def fill(masks_list, j, w=None, w2=None):
+            for i, mask in enumerate(masks_list[0]):
+                multi_index[j] = i
+                new_w = None
+                new_w2 = None
+                if self.weights is not None:
+                    new_w = w[mask]
+                    new_w2 = w2[mask]
+                if j != (len(self.masks_list) - 1):
+                    new_masks_list = [
+                        [new_mask[mask] for new_mask in masks] for masks in masks_list[1:]
+                    ]
+                    for _ in fill(new_masks_list, j + 1, new_w, new_w2):
+                        yield 1
+                else:
+                    self.counts[tuple(multi_index)] = np.count_nonzero(mask)
+                    if self.weights is not None:
+                        self.sumw[tuple(multi_index)] = new_w.sum()
+                        self.sumw2[tuple(multi_index)] = new_w2.sum()
+                    yield 1
+
+        for i in tqdm(
+                fill(self.masks_list, 0, w, w2), total=len(self.counts.ravel()),
                 desc="Combinations",
                 disable=not progress
         ):

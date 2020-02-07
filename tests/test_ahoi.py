@@ -1,7 +1,7 @@
 import ahoi
 import numpy as np
 
-scanner_methods = ["c", "numpy"]
+scanner_methods = ["c", "numpy", "numpy_reduce"]
 
 def test_examples():
     test_values = [[0.1, 0.5, 0.8], [0.6, 0.8], [0.1, 0.5, 0.8, 0.9]]
