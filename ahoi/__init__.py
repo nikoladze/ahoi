@@ -249,7 +249,7 @@ class ScannerNumpyReduce(Scanner):
                 if self.weights is not None:
                     new_w = w[mask]
                     new_w2 = w2[mask]
-                if j != (len(self.masks_list) - 1):
+                if j != (len(self.shape) - 1):
                     new_masks_list = [
                         [new_mask[mask] for new_mask in masks]
                         for masks in masks_list[1:]
