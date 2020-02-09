@@ -17,5 +17,6 @@ setup(
     author_email="nikoladze@posteo.de",
     description="Brute-force scan for rectangular cuts",
     long_description=long_description,
+    long_description_content_type='text/markdown',
     url="https://gitlab.com/nikoladze/ahoi",
 )
