@@ -6,7 +6,7 @@ with open("README.md", "r") as f:
 setup(
     name="ahoi",
     version="0.1",
-    packages=find_packages(),
+    packages=["ahoi"],
     install_requires=[
         "numpy",
         "tqdm"
