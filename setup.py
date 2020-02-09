@@ -12,7 +12,7 @@ setup(
         "tqdm"
     ],
     python_requires=">2.7",
-    ext_modules=[Extension("ahoi_scan", sources=["src/ahoi_scan.c"])],
+    ext_modules=[Extension("ahoi.ahoi_scan", sources=["src/ahoi_scan.c"])],
     author="Nikolai Hartmann",
     author_email="nikoladze@posteo.de",
     description="Brute-force scan for rectangular cuts",

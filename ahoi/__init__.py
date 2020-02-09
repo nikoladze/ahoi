@@ -143,11 +143,12 @@ class PerEventScannerC(PerEventScanner):
         if sys.version_info[0] < 3:
             import pkgutil
 
-            lib_filename = pkgutil.get_loader("ahoi_scan").filename
+            lib_filename = pkgutil.get_loader("ahoi.ahoi_scan").filename
         else:
             import importlib
 
-            lib_filename = importlib.util.find_spec("ahoi_scan").origin
+            lib_filename = importlib.util.find_spec(".ahoi_scan", "ahoi").origin
+
         lib = ctypes.cdll.LoadLibrary(lib_filename)
         self._fill_matching = lib.fill_matching
         self._fill_matching.restype = None
