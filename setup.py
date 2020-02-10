@@ -7,16 +7,13 @@ setup(
     name="ahoi",
     version="0.1",
     packages=["ahoi"],
-    install_requires=[
-        "numpy",
-        "tqdm"
-    ],
+    install_requires=["numpy", "tqdm"],
     python_requires=">2.7",
     ext_modules=[Extension("ahoi.ahoi_scan", sources=["src/ahoi_scan.c"])],
     author="Nikolai Hartmann",
     author_email="nikoladze@posteo.de",
     description="Brute-force scan for rectangular cuts",
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
     url="https://gitlab.com/nikoladze/ahoi",
 )
