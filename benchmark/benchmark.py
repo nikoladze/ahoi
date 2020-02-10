@@ -41,5 +41,10 @@ if __name__ == "__main__":
     # df = run_benchmark(nevent_range=[100000], nvar_range=np.arange(1, 10, 1), ncut_range=[5], methods=["c", "numpy", "numpy_reduce"])
     # df.to_hdf("benchmark.h5", "nvar_100k")
 
-    df = run_benchmark(nevent_range=np.arange(1000, 100000, 10000), nvar_range=[5], ncut_range=[10], methods=["c", "numpy", "numpy_reduce"])
+    df = run_benchmark(
+        nevent_range=np.arange(1000, 100000, 10000),
+        nvar_range=[5],
+        ncut_range=[10],
+        methods=["c", "numpy", "numpy_reduce"],
+    )
     df.to_hdf("benchmark.h5", "nevent")

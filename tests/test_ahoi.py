@@ -3,6 +3,7 @@ import numpy as np
 
 scanner_methods = ["c", "numpy", "numpy_reduce"]
 
+
 def test_examples():
     test_values = [[0.1, 0.5, 0.8], [0.6, 0.8], [0.1, 0.5, 0.8, 0.9]]
     for method in scanner_methods:
@@ -42,9 +43,13 @@ def test_singlecut():
         assert ahoi.scan([[[0]]], method=method) == [0]
         assert ahoi.scan([[[1]]], method=method) == [1]
         assert ahoi.scan([[[1, 0, 0, 1]]], method=method) == [2]
-        assert np.all(ahoi.scan([[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]]) == [2, 3, 1])
+        assert np.all(
+            ahoi.scan([[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]]) == [2, 3, 1]
+        )
         counts, sumw, sumw2 = ahoi.scan(
-            [[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]], weights=[2, 3, 4, 5], method=method
+            [[[1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]],
+            weights=[2, 3, 4, 5],
+            method=method,
         )
         assert np.all(sumw == [7, 9, 2])
         assert np.all(sumw2 == [29, 29, 4])
@@ -60,7 +65,9 @@ def test_consistency():
         [x[:, 3] > i for i in np.arange(0, 1, 0.1)],
         [x[:, 4] > i for i in np.arange(0, 1, 0.5)],
     ]
-    counts_ref, sumw_ref, sumw2_ref = ahoi.scan(masks_list, weights=w, method=scanner_methods[0])
+    counts_ref, sumw_ref, sumw2_ref = ahoi.scan(
+        masks_list, weights=w, method=scanner_methods[0]
+    )
     for method in scanner_methods[1:]:
         counts, sumw, sumw2 = ahoi.scan(masks_list, weights=w, method=method)
         assert (counts_ref == counts).all()
