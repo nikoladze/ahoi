@@ -48,3 +48,21 @@ def test_singlecut():
         )
         assert np.all(sumw == [7, 9, 2])
         assert np.all(sumw2 == [29, 29, 4])
+
+
+def test_consistency():
+    x = np.random.rand(1000, 5)
+    w = np.random.normal(loc=1, size=len(x))
+    masks_list = [
+        [x[:, 0] > i for i in np.arange(0, 1, 0.01)],
+        [x[:, 1] > i for i in np.arange(0, 1, 0.1)],
+        [x[:, 2] > i for i in np.arange(0, 1, 0.3)],
+        [x[:, 3] > i for i in np.arange(0, 1, 0.1)],
+        [x[:, 4] > i for i in np.arange(0, 1, 0.5)],
+    ]
+    counts_ref, sumw_ref, sumw2_ref = ahoi.scan(masks_list, weights=w, method=scanner_methods[0])
+    for method in scanner_methods[1:]:
+        counts, sumw, sumw2 = ahoi.scan(masks_list, weights=w, method=method)
+        assert (counts_ref == counts).all()
+        assert np.allclose(sumw_ref, sumw)
+        assert np.allclose(sumw2_ref, sumw2)
