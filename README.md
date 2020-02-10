@@ -55,7 +55,7 @@ counts, sumw, sumw2 = ahoi.scan(masks_list, weights=weights)
 
 The arrays `sumw` and `sumw2` will contain the sum of weights and sum of squares
 of weights for matching combinations. The sum of squares of weights can be used
-to estimate the statistical uncertainty on the sum of weights ($\sigma = \sqrt{\sum w_i^2}$).
+to estimate the statistical uncertainty on the sum of weights ($`\sigma = \sqrt{\sum w_i^2}`$).
 
 ```python
 >>> sumw[0, 1, 2, 3, 4]
@@ -74,4 +74,13 @@ to estimate the statistical uncertainty on the sum of weights ($\sigma = \sqrt{\
 ...     )
 ... )
 78.55285320268761
+```
+
+# Tests/Coverage
+
+Run the tests and coverage report inside the project directory with
+
+```sh
+python3 -m pytest --cov=ahoi --doctest-modules
+coverage html
 ```
