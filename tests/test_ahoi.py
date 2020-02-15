@@ -73,3 +73,28 @@ def test_consistency():
         assert (counts_ref == counts).all()
         assert np.allclose(sumw_ref, sumw)
         assert np.allclose(sumw2_ref, sumw2)
+
+
+def test_chunkwise():
+    x = np.random.rand(1000, 5)
+    w = np.random.normal(loc=1, size=len(x))
+    counts_chunkwise, sumw_chunkwise, sumw2_chunkwise = None, None, None
+    step = 100
+    for istart in range(0, len(x), step):
+        counts_chunkwise, sumw_chunkwise, sumw2_chunkwise = ahoi.scan(
+            [
+                [x[istart : istart + step, j] > i for i in np.arange(0, 1, 0.2)]
+                for j in range(x.shape[1])
+            ],
+            weights=w[istart : istart + step],
+            counts=counts_chunkwise,
+            sumw=sumw_chunkwise,
+            sumw2=sumw2_chunkwise,
+        )
+    counts, sumw, sumw2 = ahoi.scan(
+        [[x[:, j] > i for i in np.arange(0, 1, 0.2)] for j in range(x.shape[1])],
+        weights=w,
+    )
+    assert (counts == counts_chunkwise).all()
+    assert np.allclose(sumw, sumw_chunkwise)
+    assert np.allclose(sumw2, sumw2_chunkwise)

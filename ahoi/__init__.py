@@ -7,7 +7,15 @@ import numpy as np
 from tqdm import tqdm
 
 
-def scan(masks_list, weights=None, method="c", progress=False):
+def scan(
+    masks_list,
+    weights=None,
+    counts=None,
+    sumw=None,
+    sumw2=None,
+    method="c",
+    progress=False,
+):
     """
     Scan all combinations of matching flags
 
@@ -21,11 +29,21 @@ def scan(masks_list, weights=None, method="c", progress=False):
         An array of weights for all events. If given, in addition to the counts of
         matching combinations, the sum of weights and the sum of squares of
         weights will be filled and returned.
+    counts: ndarray, optional
+        Fill this counts array in-place instead of allocating a new one. Can be used to
+        fill the counts chunkwise. The array has to have a shape corresponding
+        to the lengths of the masks in masks_list. Has to be int64.
+    sumw: ndarray, optional
+        See counts - for the case that weights and counts are passed, sumw has
+        to be passed as well. Has to be float64.
+    sumw2: ndarray, optional
+        See counts - for the case that weights and counts are passed, sumw2 has
+        to be passed as well. Has to be float64.
     method: {"c", "numpy", "numpy_reduce"}, optional
         Method to use for the scan. "c" (default) uses a precompiled c function
         to perform the scan on a per-event basis, "numpy" and "numpy_reduce"
-        use numpy functions to perform the main loop over all combinations. In
-        most cases "c" is the fastest.
+        use numpy functions to perform the outer loop over all combinations. In
+        case of a large number of combinations "c" is the fastest.
     progress: bool, optional
         If True, show progress bar
 
@@ -72,7 +90,9 @@ def scan(masks_list, weights=None, method="c", progress=False):
         "numpy": ScannerNumpy,
         "numpy_reduce": ScannerNumpyReduce,
     }
-    scanner = scanner_dict[method](masks_list, weights=weights)
+    scanner = scanner_dict[method](
+        masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
+    )
     scanner.run(progress=progress)
     if weights is None:
         return scanner.counts
@@ -83,32 +103,69 @@ def scan(masks_list, weights=None, method="c", progress=False):
 class Scanner(object):
     "Base class"
 
-    def __init__(self, masks_list, weights=None):
+    def __init__(self, masks_list, weights=None, counts=None, sumw=None, sumw2=None):
 
         # convert masks to 2D np arrays if not yet in that format
         if not all([isinstance(masks, np.ndarray) for masks in masks_list]):
             masks_list = [np.array(masks, dtype=np.bool) for masks in masks_list]
         self.masks_list = masks_list
 
+        # convert weights to np.ndarray if not yet of that type
         self.weights = weights
         if (self.weights is not None) and (not isinstance(self.weights, np.ndarray)):
             self.weights = np.array(self.weights, dtype=np.float64)
 
         self.shape = np.array([len(masks) for masks in masks_list], dtype=np.int64)
-        self.counts = np.zeros(self.shape, dtype=np.int64)
-        if self.weights is not None:
+
+        # counts, sumw, sumw2 can be passed to be filled in place
+        self.counts = counts
+        self.sumw = sumw
+        self.sumw2 = sumw2
+        if (
+            self.weights is not None
+            and self.counts is not None
+            and (self.sumw is None or self.sumw2 is None)
+        ):
+            raise ValueError(
+                "`sumw` and `sumw2` are required if `counts` and `weights` are passed"
+            )
+
+        # otherwise new arrays are allocated
+        if self.counts is None:
+            self.counts = np.zeros(self.shape, dtype=np.int64)
+        if self.weights is not None and self.sumw is None:
             self.sumw = np.zeros(self.shape, dtype=np.float64)
             self.sumw2 = np.zeros(self.shape, dtype=np.float64)
-        else:
-            self.sumw = None
-            self.sumw2 = None
+
+        # check if shape and dtype is correct (important if they were passed)
+        self._check_shape_and_type("counts", np.int64)
+        if self.weights is not None:
+            self._check_shape_and_type("sumw", np.float64)
+            self._check_shape_and_type("sumw2", np.float64)
+
+    def _check_shape_and_type(self, array_name, dtype):
+        if not isinstance(getattr(self, array_name), np.ndarray):
+            raise TypeError("`{}` has to be of type `np.ndarray`".format(array_name))
+        if not getattr(self, array_name).dtype == dtype:
+            raise TypeError(
+                "`{}` has to be `{}`, but is `{}`".format(
+                    array_name, dtype, getattr(self, array_name).dtype
+                )
+            )
+        if not all(getattr(self, array_name).shape == self.shape):
+            raise TypeError(
+                "the shape `{}` of `{}` doesn't match the expected shape "
+                "determined from `masks_list` ({})".format(
+                    getattr(self, array_name).shape, array_name, self.shape
+                )
+            )
 
 
 class PerEventScanner(Scanner):
     "Base class for per-event methods"
 
-    def __init__(self, masks_list, weights=None):
-        super(PerEventScanner, self).__init__(masks_list, weights=weights)
+    def __init__(self, *args, **kwargs):
+        super(PerEventScanner, self).__init__(*args, **kwargs)
 
         # contiguous per event buffer (probably better for CPU cache)
         self.masks_buffer = np.empty(
@@ -120,7 +177,6 @@ class PerEventScanner(Scanner):
         for i in tqdm(
             range(len(self.masks_list[0][0])), disable=not progress, desc="Events"
         ):
-
             # fill per event buffer
             for i_mask, masks in enumerate(self.masks_list):
                 self.masks_buffer[i_mask][: len(masks)] = masks[:, i]
@@ -136,8 +192,8 @@ class PerEventScanner(Scanner):
 class PerEventScannerC(PerEventScanner):
     "per-event scan with compiled c function"
 
-    def __init__(self, masks_list, weights=None):
-        super(PerEventScannerC, self).__init__(masks_list, weights=weights)
+    def __init__(self, *args, **kwargs):
+        super(PerEventScannerC, self).__init__(*args, **kwargs)
 
         # ... not sure if this is the right way to find the library
         if sys.version_info[0] < 3:
