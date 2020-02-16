@@ -273,10 +273,10 @@ class ScannerNumpy(Scanner):
                     for _ in fill(j + 1, new_mask):
                         yield 1
                 else:
-                    self.counts[tuple(multi_index)] = np.count_nonzero(new_mask)
+                    self.counts[tuple(multi_index)] += np.count_nonzero(new_mask)
                     if self.weights is not None:
-                        self.sumw[tuple(multi_index)] = np.dot(new_mask, w)
-                        self.sumw2[tuple(multi_index)] = np.dot(new_mask, w2)
+                        self.sumw[tuple(multi_index)] += np.dot(new_mask, w)
+                        self.sumw2[tuple(multi_index)] += np.dot(new_mask, w2)
                     yield 1
 
         for i in tqdm(
@@ -314,10 +314,10 @@ class ScannerNumpyReduce(Scanner):
                     for _ in fill(new_masks_list, j + 1, new_w, new_w2):
                         yield 1
                 else:
-                    self.counts[tuple(multi_index)] = np.count_nonzero(mask)
+                    self.counts[tuple(multi_index)] += np.count_nonzero(mask)
                     if self.weights is not None:
-                        self.sumw[tuple(multi_index)] = new_w.sum()
-                        self.sumw2[tuple(multi_index)] = new_w2.sum()
+                        self.sumw[tuple(multi_index)] += new_w.sum()
+                        self.sumw2[tuple(multi_index)] += new_w2.sum()
                     yield 1
 
         for i in tqdm(
