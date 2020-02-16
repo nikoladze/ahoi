@@ -7,7 +7,7 @@ setup(
     name="ahoi",
     version="0.1",
     packages=["ahoi"],
-    install_requires=["numpy", "tqdm"],
+    install_requires=["numpy", "tqdm", "arrayqueues"],
     python_requires=">2.7",
     ext_modules=[Extension("ahoi.ahoi_scan", sources=["src/ahoi_scan.c"])],
     author="Nikolai Hartmann",

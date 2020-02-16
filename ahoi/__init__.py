@@ -5,16 +5,19 @@ import sys
 import glob
 import numpy as np
 from tqdm import tqdm
+from multiprocessing import Process
+from arrayqueues.shared_arrays import ArrayQueue
 
 
 def scan(
-    masks_list,
-    weights=None,
-    counts=None,
-    sumw=None,
-    sumw2=None,
-    method="c",
-    progress=False,
+        masks_list,
+        weights=None,
+        counts=None,
+        sumw=None,
+        sumw2=None,
+        method="c",
+        progress=False,
+        workers=1,
 ):
     """
     Scan all combinations of matching flags
@@ -90,14 +93,50 @@ def scan(
         "numpy": ScannerNumpy,
         "numpy_reduce": ScannerNumpyReduce,
     }
-    scanner = scanner_dict[method](
-        masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
-    )
-    scanner.run(progress=progress)
-    if weights is None:
-        return scanner.counts
+
+    def run_scanner(
+            masks_list,
+            weights,
+            counts,
+            sumw,
+            sumw2,
+            array_queue_counts,
+            array_queue_sumw,
+            array_queue_sumw2,
+    ):
+        scanner = scanner_dict[method](
+            masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
+        )
+        scanner.run(progress=progress)
+        array_queue.put(scanner.counts)
+        if weights is not None:
+            array_queue_sumw.put(scanner.sumw)
+            array_queue_sumw2.put(scanner.sumw2)
+
+    if workers < 2:
+        scanner = scanner_dict[method](
+            masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
+        )
+        scanner.run(progress=progress)
+        counts, sumw, sumw2 = scanner.counts, scanner.sumw, scanner.sumw2
     else:
-        return scanner.counts, scanner.sumw, scanner.sumw2
+        # fmt: off
+        queue_mb_size = (
+            (np.prod([len(masks) for masks in masks_list]) * 8)
+            // (1000 ** 2) + 1
+        )
+        array_queue_counts = ArrayQueue(queue_mb_size)
+        array_queue_sumw = None if self.weights is None else ArrayQueue(queue_mb_size)
+        array_queue_sumw2 = None if self.weights is None else ArrayQueue(queue_mb_size)
+        nevents = len(masks_list[0][0])
+        # for istart, worker in zip(range(0, nevents, nevents // workers)), workers):
+        #     p = Process()
+        #     pass
+
+    if weights is None:
+        return counts
+    else:
+        return counts, sumw, sumw2
 
 
 class Scanner(object):
