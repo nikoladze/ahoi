@@ -6,3 +6,6 @@
 .cache
 .coverage
 /htmlcov
+benchmark/*.ipynb
+benchmark/*.h5
+.ipynb_checkpoints
