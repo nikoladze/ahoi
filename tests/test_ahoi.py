@@ -1,5 +1,6 @@
 import ahoi
 import numpy as np
+import pytest
 
 scanner_methods = ["c", "numpy", "numpy_reduce"]
 
@@ -26,7 +27,7 @@ def test_examples(workers=1):
                     assert np.isclose(sumw2[i0][i1][i2], np.dot(mask, w ** 2))
 
 
-def test_noweights():
+def test_noweights(workers=1):
     for method in scanner_methods:
         x = np.random.rand(1000, 3)
         masks_list = [
@@ -34,7 +35,7 @@ def test_noweights():
         ]
         w = np.random.normal(size=1000)
         counts, _, _ = ahoi.scan(masks_list, w, method=method)
-        counts2 = ahoi.scan(masks_list, method=method)
+        counts2 = ahoi.scan(masks_list, method=method, workers=workers)
         assert (counts == counts2).all()
 
 
@@ -105,7 +106,45 @@ def test_chunkwise():
         assert np.allclose(sumw2, sumw2_chunkwise)
 
 
+def test_chunkwise_argument_checks():
+    x = np.random.rand(1000, 3)
+    w = np.random.normal(loc=1, size=len(x))
+    masks_list = [
+        [x[:, j] > i for i in np.arange(0, 1, 0.2)] for j in range(x.shape[1])
+    ]
+    shape = [len(masks) for masks in masks_list]
+
+    # pass counts and weights, but not sumw, sumw2
+    counts = np.zeros(shape, dtype=np.int64)
+    with pytest.raises(ValueError):
+        ahoi.scan(masks_list, weights=w, counts=counts)
+
+    # pass wrong shape
+    counts = np.zeros(shape[:-1], dtype=np.int64)
+    sumw = np.zeros_like(counts, dtype=np.float64)
+    sumw2 = np.zeros_like(counts, dtype=np.float64)
+    with pytest.raises(TypeError):
+        ahoi.scan(masks_list, weights=w, counts=counts, sumw=sumw, sumw2=sumw2)
+
+    # don't pass as ndarray
+    counts = np.zeros(shape, dtype=np.int64)
+    sumw = np.zeros_like(counts, dtype=np.float64)
+    sumw2 = np.zeros_like(counts, dtype=np.float64)
+    with pytest.raises(TypeError):
+        ahoi.scan(
+            masks_list, weights=w, counts=list(counts), sumw=sumw, sumw2=list(sumw2)
+        )
+
+    # pass wrong dtype
+    counts = np.zeros(shape, dtype=np.int64)
+    sumw = np.zeros_like(counts, dtype=np.float32)
+    sumw2 = np.zeros_like(counts, dtype=np.float64)
+    with pytest.raises(TypeError):
+        ahoi.scan(masks_list, weights=w, counts=counts, sumw=sumw, sumw2=sumw2)
+
+
 def test_mp():
     np.random.seed(42)
     for workers in range(2, 5, 1):
         test_examples(workers)
+        test_noweights(workers)

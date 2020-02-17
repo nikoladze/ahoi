@@ -163,7 +163,7 @@ def scan(
                 counts = worker_counts
                 if weights is None:
                     continue
-            if sumw is None:
+            if sumw is None and weights is not None:
                 sumw = worker_sumw
                 sumw2 = worker_sumw2
                 continue
@@ -231,7 +231,9 @@ class Scanner(object):
                     array_name, dtype, getattr(self, array_name).dtype
                 )
             )
-        if not all(getattr(self, array_name).shape == self.shape):
+        if (len(getattr(self, array_name).shape) != len(self.shape)) or (
+            not all(getattr(self, array_name).shape == self.shape)
+        ):
             raise TypeError(
                 "the shape `{}` of `{}` doesn't match the expected shape "
                 "determined from `masks_list` ({})".format(
