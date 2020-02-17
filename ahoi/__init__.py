@@ -5,19 +5,18 @@ import sys
 import glob
 import numpy as np
 from tqdm import tqdm
-from multiprocessing import Process
-from arrayqueues.shared_arrays import ArrayQueue
+from multiprocessing import Process, Queue
 
 
 def scan(
-        masks_list,
-        weights=None,
-        counts=None,
-        sumw=None,
-        sumw2=None,
-        method="c",
-        progress=False,
-        workers=1,
+    masks_list,
+    weights=None,
+    counts=None,
+    sumw=None,
+    sumw2=None,
+    method="c",
+    progress=False,
+    workers=1,
 ):
     """
     Scan all combinations of matching flags
@@ -49,6 +48,10 @@ def scan(
         case of a large number of combinations "c" is the fastest.
     progress: bool, optional
         If True, show progress bar
+    workers: int, optional
+        If > 1 then use this number of processes to parallelize over events.
+        Note that this will also multiply the memory consumption by the number
+        of workers.
 
     Returns:
     --------
@@ -94,44 +97,81 @@ def scan(
         "numpy_reduce": ScannerNumpyReduce,
     }
 
-    def run_scanner(
-            masks_list,
-            weights,
-            counts,
-            sumw,
-            sumw2,
-            array_queue_counts,
-            array_queue_sumw,
-            array_queue_sumw2,
-    ):
-        scanner = scanner_dict[method](
-            masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
-        )
-        scanner.run(progress=progress)
-        array_queue.put(scanner.counts)
-        if weights is not None:
-            array_queue_sumw.put(scanner.sumw)
-            array_queue_sumw2.put(scanner.sumw2)
-
     if workers < 2:
+        # if 1 worker, just run directly
         scanner = scanner_dict[method](
             masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
         )
         scanner.run(progress=progress)
         counts, sumw, sumw2 = scanner.counts, scanner.sumw, scanner.sumw2
     else:
-        # fmt: off
-        queue_mb_size = (
-            (np.prod([len(masks) for masks in masks_list]) * 8)
-            // (1000 ** 2) + 1
-        )
-        array_queue_counts = ArrayQueue(queue_mb_size)
-        array_queue_sumw = None if self.weights is None else ArrayQueue(queue_mb_size)
-        array_queue_sumw2 = None if self.weights is None else ArrayQueue(queue_mb_size)
-        nevents = len(masks_list[0][0])
-        # for istart, worker in zip(range(0, nevents, nevents // workers)), workers):
-        #     p = Process()
-        #     pass
+        # otherwise spawn subprocesses
+        queue_counts = Queue(1)
+        queue_sumw = None if weights is None else Queue(1)
+        queue_sumw2 = None if weights is None else Queue(1)
+
+        # split masks_list into number of workers parts
+        masks_list_dict = {}
+        for j, masks in enumerate(masks_list):
+            worker_masks = np.array_split(np.array(masks), workers, axis=1)
+            for i_worker, worker_mask in enumerate(worker_masks):
+                if not i_worker in masks_list_dict:
+                    masks_list_dict[i_worker] = {}
+                masks_list_dict[i_worker][j] = worker_masks[i_worker]
+
+        # split weights into number of workers parts
+        if weights is not None:
+            weights_list = np.array_split(weights, workers)
+        else:
+            weights_list = [None for i in range(workers)]
+
+        def run_scanner(
+            masks_list, weights, queue_counts, queue_sumw, queue_sumw2,
+        ):
+            scanner = scanner_dict[method](masks_list, weights=weights)
+            scanner.run(progress=progress)
+            queue_counts.put(scanner.counts)
+            if weights is not None:
+                queue_sumw.put(scanner.sumw)
+                queue_sumw2.put(scanner.sumw2)
+
+        # start workers
+        for i_worker in range(workers):
+            masks_list_worker = [
+                masks_list_dict[i_worker][i] for i in range(len(masks_list))
+            ]
+            weights_worker = weights_list[i_worker]
+            p = Process(
+                target=run_scanner,
+                args=(
+                    masks_list_worker,
+                    weights_worker,
+                    queue_counts,
+                    queue_sumw,
+                    queue_sumw2,
+                ),
+            )
+            p.start()
+
+        # sum results
+        for i_worker in tqdm(range(workers), disable=not progress, desc="Summing"):
+            worker_counts = np.array(queue_counts.get())
+            if weights is not None:
+                worker_sumw = np.array(queue_sumw.get())
+                worker_sumw2 = np.array(queue_sumw2.get())
+            if counts is None:
+                counts = worker_counts
+                if weights is None:
+                    continue
+            if sumw is None:
+                sumw = worker_sumw
+                sumw2 = worker_sumw2
+                continue
+            counts += worker_counts
+            if weights is None:
+                continue
+            sumw += worker_sumw
+            sumw2 += worker_sumw2
 
     if weights is None:
         return counts

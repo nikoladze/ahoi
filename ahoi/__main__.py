@@ -14,4 +14,4 @@ masks_list = [
 ]
 
 w = np.random.normal(size=len(x))
-counts, sumw, sumw2 = ahoi.scan(masks_list, w, progress=True)
+counts, sumw, sumw2 = ahoi.scan(masks_list, w, progress=True, workers=2)

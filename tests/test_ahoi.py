@@ -4,7 +4,7 @@ import numpy as np
 scanner_methods = ["c", "numpy", "numpy_reduce"]
 
 
-def test_examples():
+def test_examples(workers=1):
     test_values = [[0.1, 0.5, 0.8], [0.6, 0.8], [0.1, 0.5, 0.8, 0.9]]
     for method in scanner_methods:
         x = np.random.rand(10000, 3)
@@ -14,7 +14,9 @@ def test_examples():
             [x[:, 1] < i for i in test_values[1]],
             [x[:, 2] > i for i in test_values[2]],
         ]
-        counts, sumw, sumw2 = ahoi.scan(masks_list, weights=w, method=method)
+        counts, sumw, sumw2 = ahoi.scan(
+            masks_list, weights=w, method=method, workers=workers
+        )
         for i0, v0 in enumerate(test_values[0]):
             for i1, v1 in enumerate(test_values[1]):
                 for i2, v2 in enumerate(test_values[2]):
@@ -101,3 +103,9 @@ def test_chunkwise():
         assert (counts == counts_chunkwise).all()
         assert np.allclose(sumw, sumw_chunkwise)
         assert np.allclose(sumw2, sumw2_chunkwise)
+
+
+def test_mp():
+    np.random.seed(42)
+    for workers in range(2, 5, 1):
+        test_examples(workers)
