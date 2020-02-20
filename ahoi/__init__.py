@@ -103,6 +103,8 @@ def scan(
 
     if trim_masks_list:
         pass_any = get_pass_any(masks_list)
+        if weights is not None:
+            pass_any &= np.array(weights, copy=False) != 0
         masks_list = [
             np.array(
                 [np.array(mask, dtype=np.bool, copy=False)[pass_any] for mask in masks]
