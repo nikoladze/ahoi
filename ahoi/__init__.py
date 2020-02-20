@@ -17,6 +17,7 @@ def scan(
     method="c",
     progress=False,
     workers=1,
+    trim_masks_list=True,
 ):
     """
     Scan all combinations of matching flags
@@ -52,6 +53,9 @@ def scan(
         If > 1 then use this number of processes to parallelize over events.
         Note that this will also multiply the memory consumption by the number
         of workers.
+    trim_masks_list: bool, optional
+        Before scanning, internally reduce masks_list to only contain entries that pass
+        any combination.
 
     Returns:
     --------
@@ -97,6 +101,17 @@ def scan(
         "numpy_reduce": ScannerNumpyReduce,
     }
 
+    if trim_masks_list:
+        pass_any = get_pass_any(masks_list)
+        masks_list = [
+            np.array(
+                [np.array(mask, dtype=np.bool, copy=False)[pass_any] for mask in masks]
+            )
+            for masks in masks_list
+        ]
+        if weights is not None:
+            weights = np.array(weights, copy=False)[pass_any]
+
     if workers < 2:
         # if 1 worker, just run directly
         scanner = scanner_dict[method](
@@ -125,9 +140,7 @@ def scan(
         else:
             weights_list = [None for i in range(workers)]
 
-        def run_scanner(
-            masks_list, weights, queue_counts, queue_sumw, queue_sumw2,
-        ):
+        def run_scanner(masks_list, weights, queue_counts, queue_sumw, queue_sumw2):
             scanner = scanner_dict[method](masks_list, weights=weights)
             scanner.run(progress=progress)
             queue_counts.put(scanner.counts)
@@ -177,6 +190,24 @@ def scan(
         return counts
     else:
         return counts, sumw, sumw2
+
+
+def get_pass_any(masks_list):
+    "Return mask for entries that pass any combination."
+    pass_any_combination = None
+    for masks in masks_list:
+        pass_any_cut = None
+        for mask in masks:
+            mask = np.array(mask, dtype=np.bool)
+            if pass_any_cut is None:
+                pass_any_cut = mask
+            else:
+                pass_any_cut |= mask
+        if pass_any_combination is None:
+            pass_any_combination = pass_any_cut
+        else:
+            pass_any_combination &= pass_any_cut
+    return pass_any_combination
 
 
 class Scanner(object):
