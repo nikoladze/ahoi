@@ -23,8 +23,8 @@ def test_examples(workers=1):
                 for i2, v2 in enumerate(test_values[2]):
                     mask = (x[:, 0] > v0) & (x[:, 1] < v1) & (x[:, 2] > v2)
                     assert counts[i0][i1][i2] == np.count_nonzero(mask)
-                    assert np.isclose(sumw[i0][i1][i2], np.dot(mask, w))
-                    assert np.isclose(sumw2[i0][i1][i2], np.dot(mask, w ** 2))
+                    assert np.isclose(sumw[i0][i1][i2], np.dot(mask, w), atol=0)
+                    assert np.isclose(sumw2[i0][i1][i2], np.dot(mask, w ** 2), atol=0)
 
 
 def test_noweights(workers=1):
@@ -74,8 +74,8 @@ def test_consistency():
     for method in scanner_methods[1:]:
         counts, sumw, sumw2 = ahoi.scan(masks_list, weights=w, method=method)
         assert (counts_ref == counts).all()
-        assert np.allclose(sumw_ref, sumw)
-        assert np.allclose(sumw2_ref, sumw2)
+        assert np.allclose(sumw_ref, sumw, atol=0)
+        assert np.allclose(sumw2_ref, sumw2, atol=0)
 
 
 def test_chunkwise():
@@ -102,8 +102,8 @@ def test_chunkwise():
             method=method,
         )
         assert (counts == counts_chunkwise).all()
-        assert np.allclose(sumw, sumw_chunkwise)
-        assert np.allclose(sumw2, sumw2_chunkwise)
+        assert np.allclose(sumw, sumw_chunkwise, atol=0)
+        assert np.allclose(sumw2, sumw2_chunkwise, atol=0)
 
 
 def test_chunkwise_argument_checks():
