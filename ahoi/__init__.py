@@ -96,7 +96,7 @@ def scan(
            [ 1.44,  0.  ,  0.  ]]))
     """
     scanner_dict = {
-        "c": PerEventScannerC,
+        "c": ScannerC,
         "numpy": ScannerNumpy,
         "numpy_reduce": ScannerNumpyReduce,
     }
@@ -275,39 +275,17 @@ class Scanner(object):
             )
 
 
-class PerEventScanner(Scanner):
-    "Base class for per-event methods"
+class ScannerC(Scanner):
+    "per-event scan with compiled c function"
 
     def __init__(self, *args, **kwargs):
-        super(PerEventScanner, self).__init__(*args, **kwargs)
+        super(ScannerC, self).__init__(*args, **kwargs)
 
         # contiguous per event buffer (probably better for CPU cache)
         self.masks_buffer = np.empty(
             (len(self.masks_list), max([len(masks) for masks in self.masks_list])),
             dtype=np.bool,
         )
-
-    def run(self, progress=True):
-        for i in tqdm(
-            range(len(self.masks_list[0][0])), disable=not progress, desc="Events"
-        ):
-            # fill per event buffer
-            for i_mask, masks in enumerate(self.masks_list):
-                self.masks_buffer[i_mask][: len(masks)] = masks[:, i]
-
-            if self.weights is None:
-                w = None
-            else:
-                w = self.weights[i]
-
-            self.run_event(self.masks_buffer, w=w)
-
-
-class PerEventScannerC(PerEventScanner):
-    "per-event scan with compiled c function"
-
-    def __init__(self, *args, **kwargs):
-        super(PerEventScannerC, self).__init__(*args, **kwargs)
 
         # ... not sure if this is the right way to find the library
         if sys.version_info[0] < 3:
@@ -348,6 +326,21 @@ class PerEventScannerC(PerEventScanner):
         self._p_sumw = np.empty(0) if self.sumw is None else self.sumw.ravel()
         self._p_sumw2 = np.empty(0) if self.sumw2 is None else self.sumw2.ravel()
         self._p_shape = self.shape.astype(np.int32)
+
+    def run(self, progress=True):
+        for i in tqdm(
+            range(len(self.masks_list[0][0])), disable=not progress, desc="Events"
+        ):
+            # fill per event buffer
+            for i_mask, masks in enumerate(self.masks_list):
+                self.masks_buffer[i_mask][: len(masks)] = masks[:, i]
+
+            if self.weights is None:
+                w = None
+            else:
+                w = self.weights[i]
+
+            self.run_event(self.masks_buffer, w=w)
 
     def run_event(self, masks_buffer, w=None):
         "Wrap around c function"
