@@ -301,16 +301,25 @@ class ScannerC(Scanner):
         self._fill_matching = lib.fill_matching
         self._fill_matching.restype = None
         self._fill_matching.argtypes = [
-            ndpointer(dtype=np.uintp, ndim=1, flags="C_CONTIGUOUS"),  # masks
-            ctypes.c_double,  # wi
-            ctypes.c_int,  # j
-            ndpointer(dtype=ctypes.c_int, ndim=1, flags="C_CONTIGUOUS"),  # multi_index
-            ndpointer(dtype=ctypes.c_int, ndim=1, flags="C_CONTIGUOUS"),  # shape
-            ctypes.c_size_t,  # ndims
-            ndpointer(dtype=ctypes.c_long, ndim=1, flags="C_CONTIGUOUS"),  # counts
-            ndpointer(dtype=ctypes.c_double, ndim=1, flags="C_CONTIGUOUS"),  # sumw
-            ndpointer(dtype=ctypes.c_double, ndim=1, flags="C_CONTIGUOUS"),  # sumw2
-            ctypes.c_bool,  # use_weights
+            ndpointer(dtype=np.uintp, ndim=1, flags="C_CONTIGUOUS"),  # char **masks
+            ctypes.c_double,  # double wi
+            ctypes.c_int,  # size_t j
+            ctypes.c_size_t,  # size_t combination_index
+            ctypes.c_int,  # int index_factor
+            ndpointer(
+                dtype=ctypes.c_size_t, ndim=1, flags="C_CONTIGUOUS"
+            ),  # size_t *shape
+            ctypes.c_size_t,  # size_t ndims
+            ndpointer(
+                dtype=ctypes.c_long, ndim=1, flags="C_CONTIGUOUS"
+            ),  # long *counts
+            ndpointer(
+                dtype=ctypes.c_double, ndim=1, flags="C_CONTIGUOUS"
+            ),  # double *sumw
+            ndpointer(
+                dtype=ctypes.c_double, ndim=1, flags="C_CONTIGUOUS"
+            ),  # double *sumw2
+            ctypes.c_bool,  # char use_weights
         ]
 
         # prepare array of pointers for 2D per-event masks buffer
@@ -321,11 +330,10 @@ class ScannerC(Scanner):
             ).astype(np.uintp)
         )
         # the other pointers
-        self._p_multi_index = np.zeros_like(self.shape, dtype=np.int32)
         self._p_counts = self.counts.ravel()
         self._p_sumw = np.empty(0) if self.sumw is None else self.sumw.ravel()
         self._p_sumw2 = np.empty(0) if self.sumw2 is None else self.sumw2.ravel()
-        self._p_shape = self.shape.astype(np.int32)
+        self._p_shape = self.shape.astype(ctypes.c_size_t)
 
     def run(self, progress=True):
         for i in tqdm(
@@ -350,16 +358,17 @@ class ScannerC(Scanner):
             w = 0
 
         self._fill_matching(
-            self._p_masks,
-            w,
-            0,
-            self._p_multi_index,
-            self._p_shape,
-            self._p_shape.size,
-            self._p_counts,
-            self._p_sumw,
-            self._p_sumw2,
-            use_weights,
+            self._p_masks,  # char **masks
+            w,  # double wi
+            0,  # size_t j
+            0,  # size_t combination_index
+            np.prod(self.shape[1:]),  # int index_factor
+            self._p_shape,  # size_t *shape
+            self._p_shape.size,  # size_t ndims
+            self._p_counts,  # long *counts
+            self._p_sumw,  # double *sumw
+            self._p_sumw2,  # double *sumw2
+            use_weights,  # char use_weights
         )
 
 
