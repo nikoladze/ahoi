@@ -218,14 +218,14 @@ class Scanner(object):
     def __init__(self, masks_list, weights=None, counts=None, sumw=None, sumw2=None):
 
         # convert masks to 2D np arrays if not yet in that format
-        if not all([isinstance(masks, np.ndarray) for masks in masks_list]):
-            masks_list = [np.array(masks, dtype=np.bool) for masks in masks_list]
+        for i, masks in enumerate(masks_list):
+            masks_list[i] = np.array(masks, dtype=np.bool, copy=False)
         self.masks_list = masks_list
 
         # convert weights to np.ndarray if not yet of that type
         self.weights = weights
-        if (self.weights is not None) and (not isinstance(self.weights, np.ndarray)):
-            self.weights = np.array(self.weights, dtype=np.float64)
+        if self.weights is not None:
+            self.weights = np.array(self.weights, copy=False)
 
         self.shape = np.array([len(masks) for masks in masks_list], dtype=np.int64)
 
