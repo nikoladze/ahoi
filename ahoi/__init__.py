@@ -123,9 +123,13 @@ def scan(
         counts, sumw, sumw2 = scanner.counts, scanner.sumw, scanner.sumw2
     else:
         # otherwise spawn subprocesses
-        queue_counts = Queue(1)
-        queue_sumw = None if weights is None else Queue(1)
-        queue_sumw2 = None if weights is None else Queue(1)
+
+        # TODO: unhardcode
+        queue_slice_size = 100000
+        queue_size = 5
+        queue_counts = Queue(queue_size)
+        queue_sumw = None if weights is None else Queue(queue_size)
+        queue_sumw2 = None if weights is None else Queue(queue_size)
 
         # split masks_list into number of workers parts
         masks_list_dict = {}
@@ -145,10 +149,17 @@ def scan(
         def run_scanner(masks_list, weights, queue_counts, queue_sumw, queue_sumw2):
             scanner = scanner_dict[method](masks_list, weights=weights)
             scanner.run(progress=progress)
-            queue_counts.put(scanner.counts)
+
+            def send(queue, array):
+                step = queue_slice_size
+                for start in range(0, array.size, step):
+                    slice = array.ravel()[start : start + step]
+                    queue.put(((start, start + len(slice)), slice))
+
+            send(queue_counts, scanner.counts)
             if weights is not None:
-                queue_sumw.put(scanner.sumw)
-                queue_sumw2.put(scanner.sumw2)
+                send(queue_sumw, scanner.sumw)
+                send(queue_sumw2, scanner.sumw2)
 
         # start workers
         for i_worker in range(workers):
@@ -169,24 +180,24 @@ def scan(
             p.start()
 
         # sum results
-        for i_worker in tqdm(range(workers), disable=not progress, desc="Summing"):
-            worker_counts = np.array(queue_counts.get())
-            if weights is not None:
-                worker_sumw = np.array(queue_sumw.get())
-                worker_sumw2 = np.array(queue_sumw2.get())
-            if counts is None:
-                counts = worker_counts
-                if weights is None:
-                    continue
-            if sumw is None and weights is not None:
-                sumw = worker_sumw
-                sumw2 = worker_sumw2
-                continue
-            counts += worker_counts
-            if weights is None:
-                continue
-            sumw += worker_sumw
-            sumw2 += worker_sumw2
+        # TODO: write common function for initializing the arrays
+        shape = np.array([len(masks) for masks in masks_list], dtype=np.int64)
+        counts = np.zeros(shape, dtype=np.int64)
+        array_queues = [(counts.ravel(), queue_counts)]
+        if weights is not None:
+            sumw = np.zeros(shape, dtype=np.float64)
+            sumw2 = np.zeros(shape, dtype=np.float64)
+            array_queues += [(sumw.ravel(), queue_sumw), (sumw2.ravel(), queue_sumw2)]
+        for count_array, queue in tqdm(
+            array_queues, desc="Summing", disable=not progress
+        ):
+            n_slices = count_array.size // queue_slice_size
+            if (count_array.size % queue_slice_size) != 0:
+                n_slices += 1
+            n_slices *= workers
+            for _ in range(n_slices):
+                (start, stop), slice = queue.get()
+                count_array[start:stop] += slice[:]
 
     if weights is None:
         return counts
