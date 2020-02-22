@@ -182,11 +182,13 @@ def scan(
         # sum results
         # TODO: write common function for initializing the arrays
         shape = np.array([len(masks) for masks in masks_list], dtype=np.int64)
-        counts = np.zeros(shape, dtype=np.int64)
+        if counts is None:
+            counts = np.zeros(shape, dtype=np.int64)
         array_queues = [(counts.ravel(), queue_counts)]
         if weights is not None:
-            sumw = np.zeros(shape, dtype=np.float64)
-            sumw2 = np.zeros(shape, dtype=np.float64)
+            if sumw is None:
+                sumw = np.zeros(shape, dtype=np.float64)
+                sumw2 = np.zeros(shape, dtype=np.float64)
             array_queues += [(sumw.ravel(), queue_sumw), (sumw2.ravel(), queue_sumw2)]
         for count_array, queue in tqdm(
             array_queues, desc="Summing", disable=not progress

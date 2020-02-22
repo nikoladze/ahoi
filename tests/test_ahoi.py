@@ -78,7 +78,7 @@ def test_consistency():
         assert np.allclose(sumw2_ref, sumw2, atol=0)
 
 
-def test_chunkwise():
+def test_chunkwise(workers=1):
     x = np.random.rand(1000, 5)
     w = np.random.normal(loc=1, size=len(x))
     step = 100
@@ -95,11 +95,13 @@ def test_chunkwise():
                 sumw=sumw_chunkwise,
                 sumw2=sumw2_chunkwise,
                 method=method,
+                workers=workers,
             )
         counts, sumw, sumw2 = ahoi.scan(
             [[x[:, j] > i for i in np.arange(0, 1, 0.2)] for j in range(x.shape[1])],
             weights=w,
             method=method,
+            workers=workers,
         )
         assert (counts == counts_chunkwise).all()
         assert np.allclose(sumw, sumw_chunkwise, atol=0)
@@ -148,3 +150,9 @@ def test_mp():
     for workers in range(2, 5, 1):
         test_examples(workers)
         test_noweights(workers)
+
+
+def test_mp_chunkwise():
+    np.random.seed(42)
+    for workers in range(2, 5, 1):
+        test_chunkwise(workers)
