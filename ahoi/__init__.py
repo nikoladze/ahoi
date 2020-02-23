@@ -417,10 +417,11 @@ class ScannerNumpy(Scanner):
                 else:
                     if pbar is not None:
                         pbar.update(1)
-                    self.counts[tuple(multi_index)] += np.count_nonzero(new_mask)
+                    multi_index_tuple = tuple(multi_index)
+                    self.counts[multi_index_tuple] += np.count_nonzero(new_mask)
                     if self.weights is not None:
-                        self.sumw[tuple(multi_index)] += np.dot(new_mask, w)
-                        self.sumw2[tuple(multi_index)] += np.dot(new_mask, w2)
+                        self.sumw[multi_index_tuple] += np.dot(new_mask, w)
+                        self.sumw2[multi_index_tuple] += np.dot(new_mask, w2)
 
         with tqdm(
             total=len(self.counts.ravel()),
@@ -444,25 +445,26 @@ class ScannerNumpyReduce(Scanner):
 
         def fill(masks_list, j, w=None, w2=None, pbar=None):
             for i, mask in enumerate(masks_list[0]):
+                count = np.count_nonzero(mask)
                 multi_index[j] = i
+                if count == 0:
+                    continue
                 new_w = None
                 new_w2 = None
-                if self.weights is not None:
+                if w is not None:
                     new_w = w[mask]
                     new_w2 = w2[mask]
                 if j != (len(self.shape) - 1):
-                    new_masks_list = [
-                        [new_mask[mask] for new_mask in masks]
-                        for masks in masks_list[1:]
-                    ]
+                    new_masks_list = [masks.T[mask].T for masks in masks_list[1:]]
                     fill(new_masks_list, j + 1, new_w, new_w2, pbar=pbar)
                 else:
+                    multi_index_tuple = tuple(multi_index)
                     if pbar is not None:
                         pbar.update(1)
-                    self.counts[tuple(multi_index)] += np.count_nonzero(mask)
-                    if self.weights is not None:
-                        self.sumw[tuple(multi_index)] += new_w.sum()
-                        self.sumw2[tuple(multi_index)] += new_w2.sum()
+                    self.counts[multi_index_tuple] += count
+                    if w is not None:
+                        self.sumw[multi_index_tuple] += new_w.sum()
+                        self.sumw2[multi_index_tuple] += new_w2.sum()
 
         with tqdm(
             total=len(self.counts.ravel()),
