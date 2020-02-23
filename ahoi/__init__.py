@@ -5,7 +5,7 @@ import sys
 import glob
 import numpy as np
 from tqdm import tqdm
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, current_process
 
 
 def scan(
@@ -225,6 +225,17 @@ def get_pass_any(masks_list):
     return pass_any_combination
 
 
+def get_tqdm_process_info(desc):
+    process = current_process()
+    if process.name == "MainProcess":
+        process_desc = ""
+        bar_pos = 0
+    else:
+        process_desc = process.name + " "
+        bar_pos = int(process.name.split("-")[1]) - 1
+    return dict(desc="{}{}".format(process_desc, desc), position=bar_pos)
+
+
 class Scanner(object):
     "Base class"
 
@@ -349,8 +360,11 @@ class ScannerC(Scanner):
         self._p_shape = self.shape.astype(ctypes.c_size_t)
 
     def run(self, progress=True):
+
         for i in tqdm(
-            range(len(self.masks_list[0][0])), disable=not progress, desc="Events"
+            range(len(self.masks_list[0][0])),
+            disable=not progress,
+            **get_tqdm_process_info("Events")
         ):
             # fill per event buffer
             for i_mask, masks in enumerate(self.masks_list):
@@ -394,27 +408,28 @@ class ScannerNumpy(Scanner):
             w = self.weights
             w2 = self.weights ** 2
 
-        def fill(j, current_mask):
+        def fill(j, current_mask, pbar=None):
             for i, mask in enumerate(self.masks_list[j]):
                 multi_index[j] = i
                 new_mask = current_mask & mask
                 if j != (len(self.masks_list) - 1):
-                    for _ in fill(j + 1, new_mask):
-                        yield 1
+                    fill(j + 1, new_mask, pbar=pbar)
                 else:
+                    if pbar is not None:
+                        pbar.update(1)
                     self.counts[tuple(multi_index)] += np.count_nonzero(new_mask)
                     if self.weights is not None:
                         self.sumw[tuple(multi_index)] += np.dot(new_mask, w)
                         self.sumw2[tuple(multi_index)] += np.dot(new_mask, w2)
-                    yield 1
 
-        for i in tqdm(
-            fill(0, current_mask),
+        with tqdm(
             total=len(self.counts.ravel()),
-            desc="Combinations",
             disable=not progress,
-        ):
-            pass
+            **get_tqdm_process_info("Combinations")
+        ) as pbar:
+            if not progress:
+                pbar = None
+            fill(0, current_mask, pbar=pbar)
 
 
 class ScannerNumpyReduce(Scanner):
@@ -427,7 +442,7 @@ class ScannerNumpyReduce(Scanner):
             w = self.weights
             w2 = self.weights ** 2
 
-        def fill(masks_list, j, w=None, w2=None):
+        def fill(masks_list, j, w=None, w2=None, pbar=None):
             for i, mask in enumerate(masks_list[0]):
                 multi_index[j] = i
                 new_w = None
@@ -440,19 +455,20 @@ class ScannerNumpyReduce(Scanner):
                         [new_mask[mask] for new_mask in masks]
                         for masks in masks_list[1:]
                     ]
-                    for _ in fill(new_masks_list, j + 1, new_w, new_w2):
-                        yield 1
+                    fill(new_masks_list, j + 1, new_w, new_w2, pbar=pbar)
                 else:
+                    if pbar is not None:
+                        pbar.update(1)
                     self.counts[tuple(multi_index)] += np.count_nonzero(mask)
                     if self.weights is not None:
                         self.sumw[tuple(multi_index)] += new_w.sum()
                         self.sumw2[tuple(multi_index)] += new_w2.sum()
-                    yield 1
 
-        for i in tqdm(
-            fill(self.masks_list, 0, w, w2),
+        with tqdm(
             total=len(self.counts.ravel()),
-            desc="Combinations",
             disable=not progress,
-        ):
-            pass
+            **get_tqdm_process_info("Combinations")
+        ) as pbar:
+            if not progress:
+                pbar = None
+            fill(self.masks_list, 0, w, w2, pbar=pbar)
