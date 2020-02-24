@@ -5,7 +5,7 @@ import pytest
 scanner_methods = ["c", "numpy", "numpy_reduce"]
 
 
-def test_examples(workers=1):
+def test_examples(workers=1, progress=False):
     test_values = [[0.1, 0.5, 0.8], [0.6, 0.8], [0.1, 0.5, 0.8, 0.9]]
     for method in scanner_methods:
         x = np.random.rand(10000, 3)
@@ -16,7 +16,7 @@ def test_examples(workers=1):
             [x[:, 2] > i for i in test_values[2]],
         ]
         counts, sumw, sumw2 = ahoi.scan(
-            masks_list, weights=w, method=method, workers=workers
+            masks_list, weights=w, method=method, workers=workers, progress=progress
         )
         for i0, v0 in enumerate(test_values[0]):
             for i1, v1 in enumerate(test_values[1]):
@@ -25,6 +25,11 @@ def test_examples(workers=1):
                     assert counts[i0][i1][i2] == np.count_nonzero(mask)
                     assert np.isclose(sumw[i0][i1][i2], np.dot(mask, w), atol=0)
                     assert np.isclose(sumw2[i0][i1][i2], np.dot(mask, w ** 2), atol=0)
+
+
+def test_examples_progressbar():
+    test_examples(progress=True)
+    test_examples(progress=True, workers=2)
 
 
 def test_noweights(workers=1):
