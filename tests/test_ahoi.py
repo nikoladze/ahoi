@@ -46,6 +46,9 @@ def test_noweights(workers=1):
 
 def test_singlecut():
     for method in scanner_methods:
+        if method == "histogramdd":
+            # this test uses non-cumulative cuts, so this method won't work
+            continue
         masks_list = [[[0]]]
         counts = ahoi.scan(masks_list, method=method)
         assert ahoi.scan([[[0]]], method=method) == [0]

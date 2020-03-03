@@ -297,6 +297,7 @@ class Scanner(object):
             raise ValueError(
                 "`sumw` and `sumw2` are required if `counts` and `weights` are passed"
             )
+        self.in_place = self.counts is not None
 
         # otherwise new arrays are allocated
         if self.counts is None:
@@ -517,10 +518,17 @@ class ScannerHistogramDD(Scanner):
         # so we can assume each event will fall into exactly one bin
         masks_list, weights = get_trimmed_masks_list(self.masks_list, self.weights)
 
-        # fill orthogonalized masks list
-        counts = np.zeros_like(self.counts)
-        sumw = np.zeros_like(self.sumw)
-        sumw2 = np.zeros_like(self.sumw2)
+        # fill orthogonalized masks list and create views of arrays with
+        # reversed entries for dimensions that are decreasing cumulative
+        if self.in_place:
+            # if we wish to fill counts in place we have to create temporary arrays first
+            counts = np.zeros_like(self.counts)
+            sumw = np.zeros_like(self.sumw)
+            sumw2 = np.zeros_like(self.sumw2)
+        else:
+            counts = self.counts
+            sumw = self.sumw
+            sumw2 = self.sumw2
         counts_view = counts
         sumw_view = sumw
         sumw2_view = sumw2
@@ -567,13 +575,12 @@ class ScannerHistogramDD(Scanner):
         if weights is not None:
             hists = [counts_view, sumw_view, sumw2_view]
         for hist in hists:
-            h_cum = np.array(hist)
             for i in range(len(masks_list)):
-                np.cumsum(h_cum, axis=i, out=h_cum)
-            hist[:] = h_cum
+                np.cumsum(hist, axis=i, out=hist)
 
-        # add un-reordered arrays
-        self.counts += counts
-        if self.weights is not None:
-            self.sumw += sumw
-            self.sumw2 += sumw2
+        # add un-reordered arrays if we are filling "in place"
+        if self.in_place:
+            self.counts += counts
+            if self.weights is not None:
+                self.sumw += sumw
+                self.sumw2 += sumw2
