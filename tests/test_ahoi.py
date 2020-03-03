@@ -164,3 +164,27 @@ def test_mp_chunkwise():
     np.random.seed(42)
     for workers in range(2, 5, 1):
         test_chunkwise(workers)
+
+
+def test_histogram():
+    x = np.random.rand(1000, 3)
+    w = np.random.normal(loc=1, size=len(x))
+    binning = [np.arange(0, 1, 0.1) for i in range(x.shape[1])]
+    masks_list = [
+        [
+            (x[:, j] >= binning[j][i]) & (x[:, j] < binning[j][i + 1])
+            for i in range(len(binning[0]) - 1)
+        ]
+        for j in range(x.shape[1])
+    ]
+    h_counts, _ = np.histogramdd(x, bins=binning)
+    h_sumw, _ = np.histogramdd(x, bins=binning, weights=w)
+    h_sumw2, _ = np.histogramdd(x, bins=binning, weights=w ** 2)
+    for method in scanner_methods:
+        counts, sumw, sumw2 = ahoi.scan(masks_list, weights=w, method=method)
+        try:
+            assert (counts == h_counts).all()
+            assert np.allclose(h_sumw, sumw)
+            assert np.allclose(h_sumw2, sumw2)
+        except AssertionError:
+            raise Exception("Error in method {}".format(method))

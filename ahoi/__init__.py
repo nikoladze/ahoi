@@ -511,9 +511,6 @@ class ScannerNumpyReduce(Scanner):
 
 class ScannerHistogramDD(Scanner):
     def run(self, progress=True):
-        # this test assumes lower or upper bounds
-        # TODO: also support already orthogonal bins
-
         # masks_list needs to be trimmed for the following
         # so we can assume each event will fall into exactly one bin
         masks_list, weights = get_trimmed_masks_list(self.masks_list, self.weights)
@@ -533,9 +530,14 @@ class ScannerHistogramDD(Scanner):
         sumw_view = sumw
         sumw2_view = sumw2
         orthogonal_masks_list = []
-        for j, masks in enumerate(self.masks_list):
-            # reorder to be inc_cumulative
-            if is_dec_cumulative(masks):
+        already_orthogonal_ids = []
+        for j, masks in enumerate(masks_list):
+            # reorder to be inc_cumulative (if not already orthogonal)
+            is_already_orthogonal = False
+            if is_orthogonal(masks):
+                is_already_orthogonal = True
+                already_orthogonal_ids.append(j)
+            elif is_dec_cumulative(masks):
                 slice_obj = tuple(
                     [
                         slice(None) if i != j else slice(None, None, -1)
@@ -548,12 +550,18 @@ class ScannerHistogramDD(Scanner):
                     sumw2_view = sumw2_view[slice_obj]
                 masks = masks[::-1]
             elif not is_inc_cumulative(masks):
-                raise NotCumulativeError("Masks list is not cumulative")
+                raise NotCumulativeError(
+                    "At least one element of masks list is not cumulative or orthogonal. "
+                    "Can't create histogram."
+                )
 
             # orthogonalize
             orthogonal_masks = [masks[0]]  # first is already orthogonal
             for i in range(len(masks) - 1):
-                orthogonal_masks.append(masks[i] != masks[i + 1])
+                if not is_already_orthogonal:
+                    orthogonal_masks.append(masks[i] != masks[i + 1])
+                else:
+                    orthogonal_masks.append(masks[i + 1])
             orthogonal_masks_list.append(np.array(orthogonal_masks, dtype=np.bool))
 
         # fill histograms - loosely follow the implementation of np.histogramdd
@@ -576,6 +584,8 @@ class ScannerHistogramDD(Scanner):
             hists = [counts_view, sumw_view, sumw2_view]
         for hist in hists:
             for i in range(len(masks_list)):
+                if i in already_orthogonal_ids:
+                    continue
                 np.cumsum(hist, axis=i, out=hist)
 
         # add un-reordered arrays if we are filling "in place"
