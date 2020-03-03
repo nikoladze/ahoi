@@ -99,20 +99,11 @@ def scan(
         "c": ScannerC,
         "numpy": ScannerNumpy,
         "numpy_reduce": ScannerNumpyReduce,
+        "histogramdd": ScannerHistogramDD,
     }
 
     if trim_masks_list:
-        pass_any = get_pass_any(masks_list)
-        if weights is not None:
-            pass_any &= np.array(weights, copy=False) != 0
-        masks_list = [
-            np.array(
-                [np.array(mask, dtype=np.bool, copy=False)[pass_any] for mask in masks]
-            )
-            for masks in masks_list
-        ]
-        if weights is not None:
-            weights = np.array(weights, copy=False)[pass_any]
+        masks_list, weights = get_trimmed_masks_list(masks_list, weights)
 
     if workers < 2:
         # if 1 worker, just run directly
@@ -225,6 +216,22 @@ def get_pass_any(masks_list):
     return pass_any_combination
 
 
+def get_trimmed_masks_list(masks_list, weights=None):
+    "Return masks_list and weights with events removed that don't pass any combination"
+    pass_any = get_pass_any(masks_list)
+    if weights is not None:
+        pass_any &= np.array(weights, copy=False) != 0
+    masks_list = [
+        np.array(
+            [np.array(mask, dtype=np.bool, copy=False)[pass_any] for mask in masks]
+        )
+        for masks in masks_list
+    ]
+    if weights is not None:
+        weights = np.array(weights, copy=False)[pass_any]
+    return masks_list, weights
+
+
 def get_tqdm_process_info(desc):
     process = current_process()
     if process.name == "MainProcess":
@@ -234,6 +241,31 @@ def get_tqdm_process_info(desc):
         process_desc = process.name + " "
         bar_pos = int(process.name.split("-")[1]) - 1
     return dict(desc="{}{}".format(process_desc, desc), position=bar_pos)
+
+
+def is_dec_cumulative(masks):
+    "Check if each masks contains the following mask as a subset"
+    for i in range(len(masks) - 1):
+        if ((masks[i] & masks[i + 1]) != masks[i + 1]).any():
+            return False
+    return True
+
+
+def is_inc_cumulative(masks):
+    "Check if each mask is a subset the following mask"
+    for i in range(len(masks) - 1):
+        if ((masks[i] & masks[i + 1]) != masks[i]).any():
+            return False
+    return True
+
+
+def is_orthogonal(masks):
+    "Check if there is no overlap between the masks"
+    return (np.sum(masks, axis=0) < 2).all()
+
+
+class NotCumulativeError(Exception):
+    pass
 
 
 class Scanner(object):
@@ -474,3 +506,74 @@ class ScannerNumpyReduce(Scanner):
             if not progress:
                 pbar = None
             fill(self.masks_list, 0, w, w2, pbar=pbar)
+
+
+class ScannerHistogramDD(Scanner):
+    def run(self, progress=True):
+        # this test assumes lower or upper bounds
+        # TODO: also support already orthogonal bins
+
+        # masks_list needs to be trimmed for the following
+        # so we can assume each event will fall into exactly one bin
+        masks_list, weights = get_trimmed_masks_list(self.masks_list, self.weights)
+
+        # fill orthogonalized masks list
+        counts = np.zeros_like(self.counts)
+        sumw = np.zeros_like(self.sumw)
+        sumw2 = np.zeros_like(self.sumw2)
+        counts_view = counts
+        sumw_view = sumw
+        sumw2_view = sumw2
+        orthogonal_masks_list = []
+        for j, masks in enumerate(self.masks_list):
+            # reorder to be inc_cumulative
+            if is_dec_cumulative(masks):
+                slice_obj = tuple(
+                    [
+                        slice(None) if i != j else slice(None, None, -1)
+                        for i in range(len(masks_list))
+                    ]
+                )
+                counts_view = counts_view[slice_obj]
+                if weights is not None:
+                    sumw_view = sumw_view[slice_obj]
+                    sumw2_view = sumw2_view[slice_obj]
+                masks = masks[::-1]
+            elif not is_inc_cumulative(masks):
+                raise NotCumulativeError("Masks list is not cumulative")
+
+            # orthogonalize
+            orthogonal_masks = [masks[0]]  # first is already orthogonal
+            for i in range(len(masks) - 1):
+                orthogonal_masks.append(masks[i] != masks[i + 1])
+            orthogonal_masks_list.append(np.array(orthogonal_masks, dtype=np.bool))
+
+        # fill histograms - loosely follow the implementation of np.histogramdd
+        # see (https://github.com/numpy/numpy/blob/v1.16.6/numpy/lib/histograms.py#L945)
+        nbin = self.shape
+        Ncount = tuple([np.argwhere(masks.T)[:, 1] for masks in orthogonal_masks_list])
+        xy = np.ravel_multi_index(Ncount, nbin)
+        counts_view[:] = np.bincount(xy, minlength=nbin.prod()).reshape(nbin)
+        if weights is not None:
+            sumw_view[:] = np.bincount(
+                xy, weights=weights, minlength=nbin.prod()
+            ).reshape(nbin)
+            sumw2_view[:] = np.bincount(
+                xy, weights=weights ** 2, minlength=nbin.prod()
+            ).reshape(nbin)
+
+        # cumulate each dimension
+        hists = [counts_view]
+        if weights is not None:
+            hists = [counts_view, sumw_view, sumw2_view]
+        for hist in hists:
+            h_cum = np.array(hist)
+            for i in range(len(masks_list)):
+                np.cumsum(h_cum, axis=i, out=h_cum)
+            hist[:] = h_cum
+
+        # add un-reordered arrays
+        self.counts += counts
+        if self.weights is not None:
+            self.sumw += sumw
+            self.sumw2 += sumw2

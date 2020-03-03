@@ -2,7 +2,7 @@ import ahoi
 import numpy as np
 import pytest
 
-scanner_methods = ["c", "numpy", "numpy_reduce"]
+scanner_methods = ["c", "numpy", "numpy_reduce", "histogramdd"]
 
 
 def test_examples(workers=1, progress=False):
