@@ -375,7 +375,7 @@ class ScannerC(Scanner):
 
             lib_filename = pkgutil.get_loader("ahoi.ahoi_scan").filename
         else:
-            import importlib
+            import importlib.util
 
             lib_filename = importlib.util.find_spec(".ahoi_scan", "ahoi").origin
 
