@@ -45,7 +45,7 @@ def test_noweights(workers=1):
 
 
 def test_singlecut():
-    for method in scanner_methods:
+    for method in scanner_methods + ["auto"]:
         if method == "histogramdd":
             # this test uses non-cumulative cuts, so this method won't work
             continue

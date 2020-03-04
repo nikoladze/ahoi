@@ -6,6 +6,7 @@ import glob
 import numpy as np
 from tqdm import tqdm
 from multiprocessing import Process, Queue, current_process
+import warnings
 
 
 def scan(
@@ -14,7 +15,7 @@ def scan(
     counts=None,
     sumw=None,
     sumw2=None,
-    method="c",
+    method="auto",
     progress=False,
     workers=1,
     trim_masks_list=True,
@@ -43,10 +44,15 @@ def scan(
         See counts - for the case that weights and counts are passed, sumw2 has
         to be passed as well. Has to be float64.
     method: {"c", "numpy", "numpy_reduce"}, optional
-        Method to use for the scan. "c" (default) uses a precompiled c function
-        to perform the scan on a per-event basis, "numpy" and "numpy_reduce"
-        use numpy functions to perform the outer loop over all combinations. In
-        case of a large number of combinations "c" is the fastest.
+        Method to use for the scan. "histogramdd" fills an ndimensional
+        histogram and integrates it afterwards. This is typically the fastest
+        variant, but works only if the criteria of each element of the
+        masks_list are either orthogonal or strictly contain the next or
+        previous one (e.g. increasing or decreasing cuts on a variable). "c"
+        uses a precompiled c function to perform the scan on a per-event basis,
+        "numpy" and "numpy_reduce" use numpy functions to perform the outer
+        loop over all combinations. "auto" (default) tries "histogramdd" first
+        and falls back to "c" if that doesn't work.
     progress: bool, optional
         If True, show progress bar
     workers: int, optional
@@ -101,17 +107,37 @@ def scan(
         "numpy_reduce": ScannerNumpyReduce,
         "histogramdd": ScannerHistogramDD,
     }
+    fallback_to = None
+    if method == "auto":
+        method = "histogramdd"
+        fallback_to = "c"
+
+    def run_scanner(masks_list, weights, counts=None, sumw=None, sumw2=None):
+        kwargs = dict(weights=weights, counts=counts, sumw=sumw, sumw2=sumw2)
+        try:
+            scanner = scanner_dict[method](masks_list, **kwargs)
+            scanner.run(progress=progress)
+        except NotCumulativeError as e:
+            if fallback_to is not None:
+                warnings.warn(
+                    'Got an Exception from running "{}": {} \nFalling back to method "{}"'.format(
+                        method, e, fallback_to
+                    )
+                )
+                scanner = scanner_dict[fallback_to](masks_list, **kwargs)
+                scanner.run(progress=progress)
+            else:
+                raise
+        return scanner.counts, scanner.sumw, scanner.sumw2
 
     if trim_masks_list:
         masks_list, weights = get_trimmed_masks_list(masks_list, weights)
 
     if workers < 2:
         # if 1 worker, just run directly
-        scanner = scanner_dict[method](
-            masks_list, weights=weights, counts=counts, sumw=sumw, sumw2=sumw2
+        counts, sumw, sumw2 = run_scanner(
+            masks_list, weights, counts=counts, sumw=sumw, sumw2=sumw2
         )
-        scanner.run(progress=progress)
-        counts, sumw, sumw2 = scanner.counts, scanner.sumw, scanner.sumw2
     else:
         # otherwise spawn subprocesses
 
@@ -137,9 +163,8 @@ def scan(
         else:
             weights_list = [None for i in range(workers)]
 
-        def run_scanner(masks_list, weights, queue_counts, queue_sumw, queue_sumw2):
-            scanner = scanner_dict[method](masks_list, weights=weights)
-            scanner.run(progress=progress)
+        def run_worker(masks_list, weights, queue_counts, queue_sumw, queue_sumw2):
+            counts, sumw, sumw2 = run_scanner(masks_list, weights)
 
             def send(queue, array):
                 step = queue_slice_size
@@ -147,10 +172,10 @@ def scan(
                     slice = array.ravel()[start : start + step]
                     queue.put(((start, start + len(slice)), slice))
 
-            send(queue_counts, scanner.counts)
+            send(queue_counts, counts)
             if weights is not None:
-                send(queue_sumw, scanner.sumw)
-                send(queue_sumw2, scanner.sumw2)
+                send(queue_sumw, sumw)
+                send(queue_sumw2, sumw2)
 
         # start workers
         for i_worker in range(workers):
@@ -159,7 +184,7 @@ def scan(
             ]
             weights_worker = weights_list[i_worker]
             p = Process(
-                target=run_scanner,
+                target=run_worker,
                 args=(
                     masks_list_worker,
                     weights_worker,
