@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.1] - 2020-03-04
+### Fixed
+- fix importlib.util import
+
 ## [0.4] - 2020-03-04
 ### Added
 - new "histogramdd" method which is much faster in case of "cumulative" or
