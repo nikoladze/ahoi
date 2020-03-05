@@ -43,7 +43,7 @@ def scan(
     sumw2: ndarray, optional
         See counts - for the case that weights and counts are passed, sumw2 has
         to be passed as well. Has to be float64.
-    method: {"c", "numpy", "numpy_reduce"}, optional
+    method: {"c", "numpy", "numpy_reduce", "auto"}, optional
         Method to use for the scan. "histogramdd" fills an ndimensional
         histogram and integrates it afterwards. This is typically the fastest
         variant, but works only if the criteria of each element of the
@@ -221,6 +221,86 @@ def scan(
         return counts
     else:
         return counts, sumw, sumw2
+
+
+def roc_curve(
+    sumw, base_0, base_1, range=(0, 1), bins=100, condition=None, bin_in="tpr"
+):
+    """
+    Calculate the roc curve from previously filled counts/sumw arrays by
+    looking for combinations that minimse the false positive rate for fixed
+    bins in true positive rate or alternatively maximise the true positive rate
+    for fixed bins in false positive rate.
+
+    Parameters:
+    -----------
+    sumw: array_like
+        counts or sum of weights, for all combinations for both true and false
+        events. If this is a result from `ahoi.scan` individually evaluted for
+        true and false events it can be passed like [sumw_0, sumw_1].
+        Alternatively, true and false categories can be the first requirements
+        in the masks_list passed to `ahoi.scan`.
+    base_0: float
+        The base rate for false events to be used to calculate the false positive rate
+    base_1: float
+        The base rate for true events to be used to calculate the true positive rate
+    range: (float, float), optional
+        The lower and upper range of the bins.
+    bins: int or sequence
+        If given as int, it defines the number of equal-width bins in the given
+        range. If given as a sequence it defines a monotonically increasing
+        array of bin edges, including the rightmost edge.
+    condition: array_like
+        Boolean mask to apply before looking for minimum/maximum. Can be used
+        to e.g. constrain considered selections for minimum statistical
+        requirements.
+    bin_in: {"tpr", "fpr"}
+        If "tpr" then minimise false positive rate for fixed bins in true
+        positive rate otherwise maximise true positive rate for fixed bins in
+        false positive rate
+
+    Returns:
+    --------
+    fpr: array
+        False positive rates for non-zero selections in bin order
+    tpr: array
+        True positive rates for non-zero selections in bin order
+    ids: list
+        (1-dimensional) Indices of selections on the roc curve. To apply them
+        on the n-dimensional counts call e.g `counts.ravel()[ids]`.
+
+    """
+    if not hasattr(bins, "__iter__"):
+        bins = np.linspace(*range, bins + 1)
+
+    sumw_1 = sumw[1].ravel()
+    sumw_0 = sumw[0].ravel()
+    tpr = sumw_1 / base_1
+    fpr = sumw_0 / base_0
+    tpr_roc = []
+    fpr_roc = []
+    ids_roc = []
+    for i, target in tqdm(enumerate(bins[:-1]), total=len(bins)):
+        if bin_in == "tpr":
+            mask = (tpr >= target) & (tpr < bins[i + 1])
+        elif bin_in == "fpr":
+            mask = (fpr >= target) & (fpr < bins[i + 1])
+        else:
+            raise ValueError('Invalid value "{}" for option `bin_in`'.format(bin_in))
+        if condition is not None:
+            mask &= condition
+        if not mask.any():
+            continue
+        mask_ids = np.argwhere(mask).ravel()
+        if bin_in == "tpr":
+            sel_id = np.argmin(fpr[mask])
+        else:
+            sel_id = np.argmax(tpr[mask])
+        tpr_roc.append(tpr[mask][sel_id])
+        fpr_roc.append(fpr[mask][sel_id])
+        ids_roc.append(mask_ids[sel_id])
+
+    return np.array(fpr_roc), np.array(tpr_roc), np.array(ids_roc)
 
 
 def get_pass_any(masks_list):
