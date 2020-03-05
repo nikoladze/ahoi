@@ -250,7 +250,7 @@ def roc_curve(
         If given as int, it defines the number of equal-width bins in the given
         range. If given as a sequence it defines a monotonically increasing
         array of bin edges, including the rightmost edge.
-    condition: array_like
+    condition: array
         Boolean mask to apply before looking for minimum/maximum. Can be used
         to e.g. constrain considered selections for minimum statistical
         requirements.
@@ -288,7 +288,7 @@ def roc_curve(
         else:
             raise ValueError('Invalid value "{}" for option `bin_in`'.format(bin_in))
         if condition is not None:
-            mask &= condition
+            mask &= condition.ravel()
         if not mask.any():
             continue
         mask_ids = np.argwhere(mask).ravel()
