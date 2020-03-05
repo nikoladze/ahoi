@@ -271,7 +271,7 @@ def roc_curve(
 
     """
     if not hasattr(bins, "__iter__"):
-        bins = np.linspace(*range, bins + 1)
+        bins = np.linspace(range[0], range[1], bins + 1)
 
     sumw_1 = sumw[1].ravel()
     sumw_0 = sumw[0].ravel()
