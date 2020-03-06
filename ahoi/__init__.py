@@ -322,8 +322,15 @@ def get_pass_any(masks_list):
 
 
 def get_trimmed_masks_list(masks_list, weights=None):
-    "Return masks_list and weights with events removed that don't pass any combination"
+    """
+    Return masks_list and weights with events removed that don't pass any
+    combination. Returns the same passed masks_list and weights if already
+    trimmed.
+    """
     pass_any = get_pass_any(masks_list)
+    if pass_any.all():
+        # already trimmed
+        return masks_list, weights
     if weights is not None:
         pass_any &= np.array(weights, copy=False) != 0
     masks_list = [
