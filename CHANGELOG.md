@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5] - 2020-03-09
+### Added
+- `roc_curve` function
+- jupyter notebook with example
+
 ## [0.4.1] - 2020-03-04
 ### Fixed
 - fix importlib.util import

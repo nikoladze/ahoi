@@ -76,6 +76,10 @@ to estimate the statistical uncertainty on the sum of weights ($`\sigma = \sqrt{
 78.55285320268761
 ```
 
+# Tutorial/Notebook
+Have a look at the [examples](examples) for a tutorial that explains how to use
+this for solving a classification problem.
+
 # Tests/Coverage
 
 Run the tests and coverage report inside the project directory with
