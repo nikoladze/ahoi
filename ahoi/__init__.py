@@ -224,7 +224,14 @@ def scan(
 
 
 def roc_curve(
-    sumw, base_0, base_1, range=(0, 1), bins=100, condition=None, bin_in="tpr"
+    sumw,
+    base_0,
+    base_1,
+    range=(0, 1),
+    bins=100,
+    condition=None,
+    bin_in="tpr",
+    metric=None,
 ):
     """
     Calculate the roc curve from previously filled counts/sumw arrays by
@@ -250,14 +257,18 @@ def roc_curve(
         If given as int, it defines the number of equal-width bins in the given
         range. If given as a sequence it defines a monotonically increasing
         array of bin edges, including the rightmost edge.
-    condition: array
+    condition: array, optional
         Boolean mask to apply before looking for minimum/maximum. Can be used
         to e.g. constrain considered selections for minimum statistical
         requirements.
-    bin_in: {"tpr", "fpr"}
+    bin_in: {"tpr", "fpr"}, optional
         If "tpr" then minimise false positive rate for fixed bins in true
         positive rate otherwise maximise true positive rate for fixed bins in
         false positive rate
+    metric: ndarray, optional
+        If given, maximize this metric for each bin in true positive/false
+        positive rate instead of minimizing the false positive rate/maximising
+        the true positive rate. Has to have the same size as sumw[0].
 
     Returns:
     --------
@@ -292,7 +303,9 @@ def roc_curve(
         if not mask.any():
             continue
         mask_ids = np.argwhere(mask).ravel()
-        if bin_in == "tpr":
+        if metric is not None:
+            sel_id = np.argmax(metric.ravel()[mask])
+        elif bin_in == "tpr":
             sel_id = np.argmin(fpr[mask])
         else:
             sel_id = np.argmax(tpr[mask])
