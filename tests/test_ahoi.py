@@ -188,3 +188,9 @@ def test_histogram():
             assert np.allclose(h_sumw2, sumw2)
         except AssertionError:
             raise Exception("Error in method {}".format(method))
+
+
+def test_NotCumulativeError():
+    for workers in [1, 2]:
+        with pytest.raises(ahoi.NotCumulativeError):
+            ahoi.scan([[[1, 1], [1, 0], [1, 1]]], method="histogramdd")
