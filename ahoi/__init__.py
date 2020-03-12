@@ -640,22 +640,11 @@ class ScannerHistogramDD(Scanner):
         # so we can assume each event will fall into exactly one bin
         masks_list, weights = get_trimmed_masks_list(self.masks_list, self.weights)
 
-        # fill orthogonalized masks list and create views of arrays with
-        # reversed entries for dimensions that are decreasing cumulative
-        if self.in_place:
-            # if we wish to fill counts in place we have to create temporary arrays first
-            counts = np.zeros_like(self.counts)
-            sumw = np.zeros_like(self.sumw)
-            sumw2 = np.zeros_like(self.sumw2)
-        else:
-            counts = self.counts
-            sumw = self.sumw
-            sumw2 = self.sumw2
-        counts_view = counts
-        sumw_view = sumw
-        sumw2_view = sumw2
+        # fill orthogonalized masks list and store indices for dimensions that
+        # are decreasing cumulative
         orthogonal_masks_list = []
         already_orthogonal_ids = []
+        dec_cumulative_ids = set()
         for j, masks in enumerate(masks_list):
             # reorder to be inc_cumulative (if not already orthogonal)
             is_already_orthogonal = False
@@ -663,17 +652,8 @@ class ScannerHistogramDD(Scanner):
                 is_already_orthogonal = True
                 already_orthogonal_ids.append(j)
             elif is_dec_cumulative(masks):
-                slice_obj = tuple(
-                    [
-                        slice(None) if i != j else slice(None, None, -1)
-                        for i in range(len(masks_list))
-                    ]
-                )
-                counts_view = counts_view[slice_obj]
-                if weights is not None:
-                    sumw_view = sumw_view[slice_obj]
-                    sumw2_view = sumw2_view[slice_obj]
                 masks = masks[::-1]
+                dec_cumulative_ids.add(j)
             elif not is_inc_cumulative(masks):
                 raise NotCumulativeError(
                     "At least one element of masks list is not cumulative or orthogonal. "
@@ -689,33 +669,48 @@ class ScannerHistogramDD(Scanner):
                     orthogonal_masks.append(masks[i + 1])
             orthogonal_masks_list.append(np.array(orthogonal_masks, dtype=np.bool))
 
-        # fill histograms - loosely follow the implementation of np.histogramdd
+        # find nd indices - loosely follow the implementation of np.histogramdd
         # see (https://github.com/numpy/numpy/blob/v1.16.6/numpy/lib/histograms.py#L945)
         nbin = self.shape
         Ncount = tuple([np.argwhere(masks.T)[:, 1] for masks in orthogonal_masks_list])
         xy = np.ravel_multi_index(Ncount, nbin)
-        counts_view[:] = np.bincount(xy, minlength=nbin.prod()).reshape(nbin)
-        if weights is not None:
-            sumw_view[:] = np.bincount(
-                xy, weights=weights, minlength=nbin.prod()
-            ).reshape(nbin)
-            sumw2_view[:] = np.bincount(
-                xy, weights=weights ** 2, minlength=nbin.prod()
-            ).reshape(nbin)
 
-        # cumulate each dimension
-        hists = [counts_view]
+        # outer loop over arrays to save memory for in_place mode
+        arrays = [self.counts]
         if weights is not None:
-            hists = [counts_view, sumw_view, sumw2_view]
-        for hist in hists:
+            arrays += [self.sumw, self.sumw2]
+        for array in arrays:
+            if self.in_place:
+                # if we wish to fill counts in place we have to create temporary arrays first
+                new_array = np.zeros_like(array)
+            else:
+                new_array = array
+            view = new_array
+
+            for j in range(len(masks_list)):
+                if j in dec_cumulative_ids:
+                    slice_obj = tuple(
+                        [
+                            slice(None) if i != j else slice(None, None, -1)
+                            for i in range(len(masks_list))
+                        ]
+                    )
+                    view = view[slice_obj]
+
+            # fill dd histogram
+            bincount_kwargs = dict(minlength=nbin.prod())
+            if array is self.sumw:
+                bincount_kwargs.update(weights=weights)
+            if array is self.sumw2:
+                bincount_kwargs.update(weights=weights ** 2)
+            view[:] = np.bincount(xy, **bincount_kwargs).reshape(nbin)
+
+            # cumulate each dimension
             for i in range(len(masks_list)):
                 if i in already_orthogonal_ids:
                     continue
-                np.cumsum(hist, axis=i, out=hist)
+                np.cumsum(view, axis=i, out=view)
 
-        # add un-reordered arrays if we are filling "in place"
-        if self.in_place:
-            self.counts += counts
-            if self.weights is not None:
-                self.sumw += sumw
-                self.sumw2 += sumw2
+            # add un-reordered arrays if we are filling "in place"
+            if self.in_place:
+                array += new_array
