@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6] - 2020-03-17
+### Added
+- option for custom metric in `roc_curve` function
+
 ## [0.5] - 2020-03-09
 ### Added
 - `roc_curve` function
