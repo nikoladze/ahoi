@@ -43,7 +43,7 @@ def scan(
     sumw2: ndarray, optional
         See counts - for the case that weights and counts are passed, sumw2 has
         to be passed as well. Has to be float64.
-    method: {"c", "numpy", "numpy_reduce", "auto"}, optional
+    method: {"c", "numpy", "numpy_reduce", "histogramdd", "auto"}, optional
         Method to use for the scan. "histogramdd" fills an ndimensional
         histogram and integrates it afterwards. This is typically the fastest
         variant, but works only if the criteria of each element of the
